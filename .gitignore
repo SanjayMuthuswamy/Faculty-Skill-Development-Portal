@@ -1,0 +1,43 @@
+# Backend
+/server/.env
+/server/__pycache__/
+/server/.pytest_cache/
+/server/*.egg-info/
+/server/.venv/
+/server/venv/
+/server/.mypy_cache/
+
+# Frontend
+/client/node_modules/
+/client/dist/
+/client/.env
+/client/.env.local
+/client/.env.*.local
+/client/.DS_Store
+/client/npm-debug.log*
+/client/yarn-debug.log*
+/client/yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+.dockerignore
+
+# Environment
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
