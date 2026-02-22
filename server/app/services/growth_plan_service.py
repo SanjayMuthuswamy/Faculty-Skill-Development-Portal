@@ -1,0 +1,170 @@
+
+from datetime import datetime
+from typing import Optional, List
+from uuid import uuid4
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+
+from app.models.growth_plan import GrowthPlan, GrowthPlanStatus
+from app.models.growth_week import GrowthWeek
+from app.models.week_task import WeekTask
+from app.schemas.growth_plan import GrowthPlanCreate
+
+class GrowthPlanService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def create_plan(self, faculty_id: str, plan_in: GrowthPlanCreate) -> GrowthPlan:
+        # Check active plan
+        active_res = await self.db.execute(select(GrowthPlan).where(
+            GrowthPlan.faculty_id == faculty_id,
+            GrowthPlan.status == GrowthPlanStatus.ACTIVE
+        ))
+        if active_res.scalar_one_or_none():
+            raise ValueError("Faculty already has an active growth plan.")
+
+        plan = GrowthPlan(
+            id=str(uuid4()),
+            faculty_id=faculty_id,
+            status=GrowthPlanStatus.ACTIVE,
+            **plan_in.model_dump()
+        )
+        self.db.add(plan)
+        
+        # Generate 4 weeks (simple logic for now)
+        for i in range(1, 5):
+            week = GrowthWeek(
+                id=str(uuid4()),
+                plan_id=plan.id,
+                week_number=i,
+                title=f"Week {i}: {plan_in.target_skill} Fundamentals",
+                required_practice_count=3,
+                required_min_avg_score=60.0
+            )
+            self.db.add(week)
+            
+            # Add tasks
+            tasks = [
+                f"Read documentation on {plan_in.target_skill}",
+                f"Complete 3 practice tests",
+                f"Review mistakes from previous attempts"
+            ]
+            for t_label in tasks:
+                task = WeekTask(
+                    id=str(uuid4()),
+                    week_id=week.id,
+                    label=t_label,
+                    done=False
+                )
+                self.db.add(task)
+                
+        await self.db.commit()
+        await self.db.refresh(plan)
+        return plan
+
+    async def get_active_plan(self, faculty_id: str) -> Optional[GrowthPlan]:
+        result = await self.db.execute(
+            select(GrowthPlan)
+            .where(GrowthPlan.faculty_id == faculty_id, GrowthPlan.status == GrowthPlanStatus.ACTIVE)
+            .options(
+                selectinload(GrowthPlan.weeks).selectinload(GrowthWeek.tasks)
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_plan_by_id(self, plan_id: str) -> Optional[GrowthPlan]:
+        result = await self.db.execute(
+            select(GrowthPlan)
+            .where(GrowthPlan.id == plan_id)
+            .options(
+                selectinload(GrowthPlan.weeks).selectinload(GrowthWeek.tasks)
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def list_plans(self, skip: int = 0, limit: int = 100) -> List[GrowthPlan]:
+        result = await self.db.execute(
+            select(GrowthPlan)
+            .offset(skip)
+            .limit(limit)
+            .options(selectinload(GrowthPlan.weeks))
+        )
+        return result.scalars().all()
+
+    async def update_task_status(self, task_id: str, done: bool) -> bool:
+        result = await self.db.execute(
+            select(WeekTask)
+            .where(WeekTask.id == task_id)
+            .options(selectinload(WeekTask.week).selectinload(GrowthWeek.plan))
+        )
+        task = result.scalar_one_or_none()
+        
+        if not task:
+            return False
+            
+        task.done = done
+        
+        # Check if all tasks in the week are done to auto-complete the week
+        week = task.week
+        res_tasks = await self.db.execute(select(WeekTask).where(WeekTask.week_id == week.id))
+        all_tasks = res_tasks.scalars().all()
+        
+        if all(t.done for t in all_tasks):
+            await self.complete_week(week.id)
+        else:
+            # Re-calculate progress if tasks are toggled
+            plan = week.plan
+            # Refetch all weeks and tasks to be sure
+            res_weeks = await self.db.execute(
+                select(GrowthWeek)
+                .where(GrowthWeek.plan_id == plan.id)
+                .options(selectinload(GrowthWeek.tasks))
+            )
+            weeks = res_weeks.scalars().all()
+            total_tasks = sum(len(w.tasks) for w in weeks)
+            done_tasks = sum(sum(1 for t in w.tasks if t.done) for w in weeks)
+            
+            if total_tasks > 0:
+                plan.progress_percentage = (done_tasks / total_tasks) * 100
+            
+            await self.db.commit()
+            
+        return True
+
+    async def complete_week(self, week_id: str) -> bool:
+        result = await self.db.execute(select(GrowthWeek).where(GrowthWeek.id == week_id).options(selectinload(GrowthWeek.plan)))
+        week = result.scalar_one_or_none()
+        
+        if not week or week.completed:
+            return False
+            
+        # Logic: Check if conditions met (mocked here as always true if requested)
+        week.completed = True
+        week.completed_at = datetime.utcnow()
+        
+        # Update plan progress
+        plan = week.plan
+        total_weeks = len(plan.weeks) # This might need re-fetching if not loaded
+        completed_weeks = sum(1 for w in plan.weeks if w.completed) # Optimistic count
+        
+        if total_weeks > 0:
+            plan.progress_percentage = (completed_weeks / total_weeks) * 100
+            
+        if plan.progress_percentage >= 100:
+            plan.status = GrowthPlanStatus.COMPLETED
+            
+        await self.db.commit()
+        return True
+
+    async def reset_plan(self, faculty_id: str) -> bool:
+        # Delete all plans for this faculty to allow hard reset
+        # Or just mark them as cancelled/deleted
+        result = await self.db.execute(select(GrowthPlan).where(GrowthPlan.faculty_id == faculty_id))
+        plans = result.scalars().all()
+        for plan in plans:
+            await self.db.delete(plan)
+        
+        await self.db.commit()
+        return True

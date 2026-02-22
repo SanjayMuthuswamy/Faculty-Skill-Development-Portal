@@ -1,0 +1,69 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List
+
+from app.api.v1.deps import get_current_user, get_session
+from app.models.user import User, UserRole
+from app.schemas.attempt import Attempt as AttemptSchema, AttemptCreate, BulkSubmitAttempt
+from app.services.attempt_service import AttemptService
+
+router = APIRouter(tags=["attempts"])
+
+@router.post("/", response_model=AttemptSchema)
+async def start_attempt(
+    attempt_in: AttemptCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    if not current_user.faculty_profile:
+        raise HTTPException(status_code=400, detail="User has no faculty profile")
+        
+    service = AttemptService(db)
+    return await service.start_attempt(current_user.faculty_profile.id, attempt_in.test_id)
+
+@router.post("/{attempt_id}/answers")
+async def submit_answer(
+    attempt_id: str,
+    question_id: str,
+    selected_option: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    service = AttemptService(db)
+    return await service.submit_answer(attempt_id, question_id, selected_option)
+
+@router.post("/{attempt_id}/finish", response_model=AttemptSchema)
+async def finish_attempt(
+    attempt_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    service = AttemptService(db)
+    attempt = await service.finish_attempt(attempt_id)
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    return attempt
+
+@router.post("/{attempt_id}/submit", response_model=AttemptSchema)
+async def bulk_submit_attempt(
+    attempt_id: str,
+    submission: BulkSubmitAttempt,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    service = AttemptService(db)
+    attempt = await service.bulk_submit(attempt_id, submission.answers)
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    return attempt
+
+@router.get("/me", response_model=List[AttemptSchema])
+async def list_my_attempts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    if not current_user.faculty_profile:
+        raise HTTPException(status_code=400, detail="User has no faculty profile")
+        
+    service = AttemptService(db)
+    return await service.get_faculty_attempts(current_user.faculty_profile.id)

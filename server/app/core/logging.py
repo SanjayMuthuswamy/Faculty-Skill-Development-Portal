@@ -1,51 +1,18 @@
+
 import logging
-import logging.config
-from typing import Any
+import sys
+from app.core.config import settings
 
+def setup_logging():
+    """Configure logging for the application."""
+    logging.basicConfig(
+        level=logging.INFO if not settings.DEBUG else logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+    
+    # Set lower level for third-party libraries to avoid noise
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
-def setup_logging() -> None:
-    """Configure structured logging for the application."""
-    logging_config: dict[str, Any] = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "default": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
-            "detailed": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "formatter": "detailed",
-                "level": "DEBUG",
-            },
-        },
-        "loggers": {
-            "app": {
-                "level": "DEBUG",
-                "handlers": ["console"],
-                "propagate": False,
-            },
-            "sqlalchemy": {
-                "level": "WARNING",
-                "handlers": ["console"],
-                "propagate": False,
-            },
-        },
-        "root": {
-            "level": "INFO",
-            "handlers": ["console"],
-        },
-    }
-
-    logging.config.dictConfig(logging_config)
-
-
-def get_logger(name: str) -> logging.Logger:
-    """Get a logger instance."""
-    return logging.getLogger(name)
+logger = logging.getLogger("fsdp.api")

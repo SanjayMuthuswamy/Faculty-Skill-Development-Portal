@@ -1,0 +1,87 @@
+import http from './http'
+
+export enum SkillStatus {
+    VERIFIED = "VERIFIED",
+    UNVERIFIED = "UNVERIFIED",
+    PENDING = "PENDING",
+}
+
+export interface FacultySkill {
+    id: string;
+    faculty_id: string;
+    skill_id: string;
+    level: number;
+    status: SkillStatus;
+    updated_at: string;
+    skill: {
+        id: string;
+        name: string;
+        domain: string;
+    };
+}
+
+export interface FacultyProfile {
+    id: string;
+    user_id: string;
+    department?: string;
+    designation?: string;
+    experience_years?: number;
+    created_at: string;
+    user?: {
+        id: string;
+        name: string;
+        email: string;
+    };
+    skills?: FacultySkill[];
+}
+
+export interface FacultyProfileUpdate {
+    department?: string;
+    designation?: string;
+    experience_years?: number;
+}
+
+export interface FacultySkillCreate {
+    skill_name: string;
+    domain: string;
+    level?: number;
+}
+
+export const facultyApi = {
+    listProfiles: async (skip: number = 0, limit: number = 100): Promise<FacultyProfile[]> => {
+        const response = await http.get<FacultyProfile[]>('/api/v1/faculty/', {
+            params: { skip, limit }
+        });
+        return response.data;
+    },
+
+    getMe: async (): Promise<FacultyProfile> => {
+        const response = await http.get<FacultyProfile>('/api/v1/faculty/me');
+        return response.data;
+    },
+
+    updateMe: async (data: FacultyProfileUpdate): Promise<FacultyProfile> => {
+        const response = await http.patch<FacultyProfile>('/api/v1/faculty/me', data);
+        return response.data;
+    },
+
+    addSkill: async (skillData: FacultySkillCreate): Promise<FacultySkill> => {
+        const response = await http.post<FacultySkill>('/api/v1/faculty/me/skills', skillData);
+        return response.data;
+    },
+
+    getProfile: async (id: string): Promise<FacultyProfile> => {
+        const response = await http.get<FacultyProfile>(`/api/v1/faculty/${id}`);
+        return response.data;
+    },
+
+    createProfile: async (data: any): Promise<FacultyProfile> => {
+        const response = await http.post<FacultyProfile>('/api/v1/faculty/', data);
+        return response.data;
+    },
+
+    verifySkill: async (facultyId: string, skillId: string): Promise<{ status: string }> => {
+        const response = await http.post<{ status: string }>(`/api/v1/faculty/${facultyId}/verify-skill/${skillId}`);
+        return response.data;
+    }
+}

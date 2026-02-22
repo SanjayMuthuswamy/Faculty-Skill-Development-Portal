@@ -1,91 +1,118 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { authApi } from '@/lib/api/auth'
-import { storage } from '@/lib/storage/storage'
-
-interface User {
-  id: string
-  name: string
-  email: string
-  role: 'ADMIN' | 'FACULTY'
-  is_active: boolean
-  created_at: string
-}
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { User } from '../../lib/types';
+import { authApi } from '../../lib/api/auth';
+import { storage } from '../../lib/storage/storage';
 
 interface AuthContextType {
-  user: User | null
-  isAuthenticated: boolean
-  isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
-  logout: () => void
-  setUser: (user: User | null) => void
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+/**
+ * Maps backend user response (uppercase roles, ISO dates) to frontend User type.
+ * Defensive: returns a valid User even if backend shape differs slightly.
+ */
+function mapBackendUser(data: Record<string, unknown>): User {
+  return {
+    id: String(data.id ?? ''),
+    name: String(data.name ?? ''),
+    email: String(data.email ?? ''),
+    role: String(data.role ?? 'FACULTY').toLowerCase() as User['role'],
+    department: data.department != null ? String(data.department) : undefined,
+    designation: data.designation != null ? String(data.designation) : undefined,
+    experience: typeof data.experience === 'number' ? data.experience : undefined,
+    joinedDate: data.created_at != null ? String(data.created_at) : undefined,
+  };
+}
 
-  // Load user on mount
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // On mount: if we have a stored access token, validate it by calling /me
   useEffect(() => {
-    const loadUser = async () => {
-      const token = storage.getAccessToken()
-      if (token) {
-        try {
-          const currentUser = await authApi.getMe()
-          setUser(currentUser)
-          storage.setUser(currentUser)
-        } catch (error) {
-          console.error('Failed to load user:', error)
-          storage.clear()
+    const restoreSession = async () => {
+      try {
+        const token = storage.getAccessToken();
+        if (!token) {
+          setIsLoading(false);
+          return;
         }
-      }
-      setIsLoading(false)
-    }
 
-    loadUser()
-  }, [])
+        // Validate token by fetching current user from backend
+        const meData = await authApi.getMe();
+        const restoredUser = mapBackendUser(meData as unknown as Record<string, unknown>);
+        setUser(restoredUser);
+        storage.setUser(restoredUser);
+      } catch (error) {
+        // Token expired or invalid — clear everything
+        console.error('Session restore failed:', error);
+        storage.clear();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    restoreSession();
+  }, []);
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true)
     try {
-      const tokens = await authApi.login(email, password)
-      storage.setAccessToken(tokens.access_token)
-      storage.setRefreshToken(tokens.refresh_token)
+      // Step 1: Get tokens from backend
+      const tokenResponse = await authApi.login(email, password);
 
-      const currentUser = await authApi.getMe()
-      setUser(currentUser)
-      storage.setUser(currentUser)
-    } finally {
-      setIsLoading(false)
+      // Step 2: Store tokens
+      storage.setAccessToken(tokenResponse.access_token);
+      storage.setRefreshToken(tokenResponse.refresh_token);
+
+      // Step 3: Fetch user profile using the new token
+      const meData = await authApi.getMe();
+      const loggedInUser = mapBackendUser(meData as unknown as Record<string, unknown>);
+
+      // Step 4: Store user and update state
+      storage.setUser(loggedInUser);
+      setUser(loggedInUser);
+    } catch (error: unknown) {
+      // Normalize error for the UI
+      storage.clear();
+
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { detail?: string }; status?: number } };
+        const detail = axiosError.response?.data?.detail;
+        if (detail) {
+          throw new Error(detail);
+        }
+        if (axiosError.response?.status === 401) {
+          throw new Error('Invalid email or password');
+        }
+      }
+
+      throw new Error('Login failed. Please check your connection and try again.');
     }
-  }
+  };
 
   const logout = () => {
-    authApi.logout()
-    setUser(null)
-  }
+    setUser(null);
+    storage.clear();
+    window.location.href = '/login';
+  };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        login,
-        logout,
-        setUser,
-      }}
-    >
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
-  )
+  );
 }
 
-export const useAuth = () => {
-  const context = useContext(AuthContext)
+export function useAuth() {
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within AuthProvider')
+    throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context
+  return context;
 }

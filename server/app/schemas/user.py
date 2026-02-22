@@ -1,24 +1,36 @@
+
 from datetime import datetime
+from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
 
 from app.models.user import UserRole
 
-
+# Shared properties
 class UserBase(BaseModel):
-    """Base user schema."""
-
-    name: str
     email: EmailStr
+    is_active: Optional[bool] = True
+    role: UserRole = UserRole.FACULTY
+    name: Optional[str] = None
 
+# Properties to receive via API on creation
+class UserCreate(UserBase):
+    password: str
 
-class UserResponse(UserBase):
-    """User response schema."""
+# Properties to receive via API on update
+class UserUpdate(BaseModel):
+    password: Optional[str] = None
+    name: Optional[str] = None
+    is_active: Optional[bool] = None
 
+class UserInDBBase(UserBase):
     id: str
-    role: UserRole
-    is_active: bool
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+# Additional properties to return via API
+class User(UserInDBBase):
+    pass

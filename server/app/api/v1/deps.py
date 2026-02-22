@@ -41,7 +41,7 @@ async def get_current_user(
     return user
 
 
-async def require_role(*allowed_roles: UserRole) -> None:
+def require_role(*allowed_roles: UserRole):
     """Dependency factory to require specific roles."""
 
     async def check_role(current_user: User = Depends(get_current_user)) -> User:

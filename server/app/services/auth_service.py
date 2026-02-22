@@ -1,60 +1,37 @@
-"""Authentication service."""
 
-from datetime import timedelta
-from uuid import uuid4
+from datetime import datetime, timedelta
+from typing import Optional
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+from sqlalchemy.future import select
 
-from app.core.security import (
-    create_access_token,
-    create_refresh_token,
-    verify_password,
-    hash_password,
-)
+from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
 from app.models.user import User
-from app.schemas.auth import TokenResponse
-
+from app.schemas.auth import LoginRequest, TokenResponse
 
 class AuthService:
-    """Service for authentication operations."""
+    def __init__(self, db: Session):
+        self.db = db
 
-    @staticmethod
-    async def authenticate_user(
-        session: AsyncSession, email: str, password: str
-    ) -> User | None:
-        """Authenticate a user by email and password."""
-        result = await session.execute(select(User).where(User.email == email))
+    async def authenticate_user(self, login_data: LoginRequest) -> Optional[User]:
+        result = await self.db.execute(select(User).where(User.email == login_data.email))
         user = result.scalar_one_or_none()
-
-        if not user or not verify_password(password, user.password_hash):
+        
+        if not user:
             return None
-
-        if not user.is_active:
+        if not verify_password(login_data.password, user.password_hash):
             return None
-
         return user
 
-    @staticmethod
-    async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
-        """Get user by email."""
-        result = await session.execute(select(User).where(User.email == email))
-        return result.scalar_one_or_none()
-
-    @staticmethod
-    async def get_user_by_id(session: AsyncSession, user_id: str) -> User | None:
-        """Get user by ID."""
-        result = await session.execute(select(User).where(User.id == user_id))
-        return result.scalar_one_or_none()
-
-    @staticmethod
-    async def create_tokens(user: User) -> TokenResponse:
-        """Create access and refresh tokens for a user."""
-        access_token = create_access_token(data={"sub": user.id, "role": user.role.value})
-        refresh_token = create_refresh_token(data={"sub": user.id})
-
+    def create_tokens(self, user: User) -> TokenResponse:
+        access_token = create_access_token(user.id)
+        refresh_token = create_refresh_token(user.id)
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer",
+            token_type="bearer"
         )
+    @staticmethod
+    async def get_user_by_id(db: Session, user_id: str) -> Optional[User]:
+        result = await db.execute(select(User).where(User.id == user_id))
+        return result.scalar_one_or_none()

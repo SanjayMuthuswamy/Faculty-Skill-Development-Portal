@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user, get_session
 from app.schemas.auth import LoginRequest, TokenResponse
-from app.schemas.user import UserResponse
+from app.schemas.user import User
 from app.services.auth_service import AuthService
 
 router = APIRouter(tags=["auth"])
@@ -21,9 +21,8 @@ async def login(
     
     Returns access token and refresh token.
     """
-    user = await AuthService.authenticate_user(
-        session, email=login_data.email, password=login_data.password
-    )
+    auth_service = AuthService(session)
+    user = await auth_service.authenticate_user(login_data)
 
     if not user:
         raise HTTPException(
@@ -31,14 +30,14 @@ async def login(
             detail="Invalid email or password",
         )
 
-    tokens = await AuthService.create_tokens(user)
+    tokens = auth_service.create_tokens(user)
     return tokens
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=User)
 async def get_current_user_info(
-    current_user: UserResponse = Depends(get_current_user),
-) -> UserResponse:
+    current_user: User = Depends(get_current_user),
+) -> User:
     """
     Get current user information.
     

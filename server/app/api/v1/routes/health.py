@@ -9,7 +9,7 @@ from app.api.v1.deps import get_session
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health")
+@router.get("")
 async def health_check(session: AsyncSession = Depends(get_session)) -> dict[str, str]:
     """
     Health check endpoint.
