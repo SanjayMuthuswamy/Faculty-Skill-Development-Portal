@@ -27,8 +27,8 @@ class GrowthWeekBase(BaseModel):
     title: str
     required_practice_count: int
     required_min_avg_score: float
-    completed_practice_count: int
-    avg_score_for_week: float
+    completed_practice_count: int = 0
+    avg_score_for_week: float = 0.0
     completed: bool = False
     completed_at: Optional[datetime] = None
 

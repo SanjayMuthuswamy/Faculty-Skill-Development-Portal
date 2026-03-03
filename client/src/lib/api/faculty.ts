@@ -75,13 +75,18 @@ export const facultyApi = {
         return response.data;
     },
 
-    createProfile: async (data: any): Promise<FacultyProfile> => {
-        const response = await http.post<FacultyProfile>('/api/v1/faculty/', data);
+    registerFaculty: async (data: any): Promise<FacultyProfile> => {
+        const response = await http.post<FacultyProfile>('/api/v1/faculty/register-faculty', data);
         return response.data;
     },
 
     verifySkill: async (facultyId: string, skillId: string): Promise<{ status: string }> => {
         const response = await http.post<{ status: string }>(`/api/v1/faculty/${facultyId}/verify-skill/${skillId}`);
+        return response.data;
+    },
+
+    getSkillSuggestions: async (): Promise<{ suggested_skills: string[], reasoning: string }> => {
+        const response = await http.get<{ suggested_skills: string[], reasoning: string }>('/api/v1/faculty/me/skill-suggestions');
         return response.data;
     }
 }

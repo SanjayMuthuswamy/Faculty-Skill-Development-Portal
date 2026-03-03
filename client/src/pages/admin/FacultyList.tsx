@@ -30,14 +30,18 @@ export function FacultyList() {
         email: '',
         department: 'Computer Science',
         designation: 'Assistant Professor',
-        experience: 0
+        experience: 0,
+        tempPassword: ''
     });
 
     const createMutation = useMutation({
-        mutationFn: (data: any) => facultyApi.createProfile({
-            ...data,
+        mutationFn: (data: any) => facultyApi.registerFaculty({
+            name: data.name,
+            email: data.email,
+            department: data.department,
+            designation: data.designation,
             experience_years: data.experience,
-            user_id: '' // Backend handles user creation or association via email usually
+            password: data.tempPassword
         }),
         onSuccess: () => {
             addToast('Faculty member added successfully', 'success');
@@ -47,7 +51,8 @@ export function FacultyList() {
                 email: '',
                 department: 'Computer Science',
                 designation: 'Assistant Professor',
-                experience: 0
+                experience: 0,
+                tempPassword: ''
             });
             queryClient.invalidateQueries({ queryKey: ['admin', 'faculty', 'list'] });
         },
@@ -281,6 +286,19 @@ export function FacultyList() {
                                 onChange={e => setNewFaculty({ ...newFaculty, experience: parseInt(e.target.value) || 0 })}
                             />
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Temporary Password</label>
+                            <input
+                                type="password"
+                                required
+                                minLength={6}
+                                placeholder="Min 6 characters"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={newFaculty.tempPassword}
+                                onChange={e => setNewFaculty({ ...newFaculty, tempPassword: e.target.value })}
+                            />
+                            <p className="text-[10px] text-gray-400 mt-1 italic">Faculty member will use this for their first login.</p>
+                        </div>
 
                         <div className="pt-4 flex gap-3">
                             <Button type="button" variant="ghost" className="flex-1" onClick={() => setShowAddModal(false)}>
@@ -344,11 +362,11 @@ function FacultyRow({ faculty, onView }: { faculty: any, onView: () => void }) {
                 </div>
             </TableCell>
             <TableCell className="py-4">
-                <div className="flex flex-col">
-                    <span className="text-xs font-medium text-gray-600 truncate max-w-[120px]">
-                        {summary && summary.verified_skills_count > 0 ? `${summary.verified_skills_count} Verified` : 'No Verified Skills'}
+                <div className="flex flex-col gap-0.5">
+                    <span className={`text-[11px] font-black leading-tight truncate max-w-[140px] px-2 py-0.5 rounded-md w-fit ${summary?.top_gap ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-gray-50 text-gray-400 italic'}`}>
+                        {summary?.top_gap || 'Analysis pending...'}
                     </span>
-                    <span className="text-[10px] text-gray-400 uppercase font-black">Top Gap</span>
+                    <span className="text-[9px] text-gray-400 uppercase font-black tracking-widest pl-0.5">AI Insights</span>
                 </div>
             </TableCell>
             <TableCell className="text-right pr-6 py-4">

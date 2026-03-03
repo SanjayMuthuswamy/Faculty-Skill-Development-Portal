@@ -16,10 +16,18 @@ async def start_attempt(
     db: AsyncSession = Depends(get_session)
 ):
     if not current_user.faculty_profile:
-        raise HTTPException(status_code=400, detail="User has no faculty profile")
-        
+        raise HTTPException(
+            status_code=400,
+            detail="User has no faculty profile. Only faculty members can take tests."
+        )
+    
     service = AttemptService(db)
-    return await service.start_attempt(current_user.faculty_profile.id, attempt_in.test_id)
+    try:
+        return await service.start_attempt(current_user.faculty_profile.id, attempt_in.test_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create attempt: {str(e)}")
 
 @router.post("/{attempt_id}/answers")
 async def submit_answer(
@@ -67,3 +75,17 @@ async def list_my_attempts(
         
     service = AttemptService(db)
     return await service.get_faculty_attempts(current_user.faculty_profile.id)
+
+
+@router.get("/{attempt_id}", response_model=AttemptSchema)
+async def get_attempt_by_id(
+    attempt_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    """Get a single attempt with its answers – used by the TestResult page."""
+    service = AttemptService(db)
+    attempt = await service.get_attempt(attempt_id)
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    return attempt

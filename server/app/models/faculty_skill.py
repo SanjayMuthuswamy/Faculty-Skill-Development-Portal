@@ -11,6 +11,8 @@ from app.db.base import Base
 class SkillStatus(str, Enum):
     VERIFIED = "VERIFIED"
     UNVERIFIED = "UNVERIFIED"
+    ASSESSMENT_DUE = "ASSESSMENT_DUE"
+    SELF_DECLARED = "SELF_DECLARED"
 
 class FacultySkill(Base):
     __tablename__ = "faculty_skills"

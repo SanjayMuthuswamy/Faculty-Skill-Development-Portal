@@ -6,15 +6,24 @@ export interface AttemptAnswer {
     is_correct?: boolean;
 }
 
+/**
+ * Matches the backend Attempt schema exactly.
+ * Key field names from the backend:
+ *   - total       (not total_questions)
+ *   - submitted_at (not completed_at)
+ *   - started_at
+ *   - status
+ */
 export interface Attempt {
     id: string;
     faculty_id: string;
     test_id?: string;
-    skill_id?: string;
     score: number;
-    total_questions: number;
+    total: number;            // BUG-10 fix: was total_questions, backend returns 'total'
     accuracy: number;
-    completed_at: string;
+    started_at: string;
+    submitted_at?: string;    // BUG-10 fix: was completed_at, backend returns 'submitted_at'
+    status?: string;
     test_title?: string;
     domain?: string;
     answers?: AttemptAnswer[];
@@ -54,3 +63,4 @@ export const attemptsApi = {
         return response.data;
     }
 }
+

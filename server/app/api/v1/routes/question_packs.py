@@ -9,6 +9,44 @@ from app.services.question_pack_service import QuestionPackService
 
 router = APIRouter(tags=["question-packs"])
 
+# ── Static question routes MUST come before /{pack_id} to avoid routing conflicts ──
+
+@router.get("/questions", response_model=List[QuestionSchema])
+async def list_all_questions(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_session)
+):
+    service = QuestionPackService(db)
+    return await service.get_all_questions(skip=skip, limit=limit)
+
+@router.patch("/questions/{question_id}", response_model=QuestionSchema)
+async def update_question(
+    question_id: str,
+    question_in: QuestionCreate,
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: AsyncSession = Depends(get_session)
+):
+    service = QuestionPackService(db)
+    updated = await service.update_question(question_id, question_in.model_dump(exclude_unset=True))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Question not found")
+    return updated
+
+@router.delete("/questions/{question_id}")
+async def delete_question(
+    question_id: str,
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: AsyncSession = Depends(get_session)
+):
+    service = QuestionPackService(db)
+    success = await service.delete_question(question_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Question not found")
+    return {"status": "success"}
+
+# ── Pack-level routes ──
+
 @router.get("/", response_model=List[QuestionPackSchema])
 async def list_question_packs(
     skip: int = 0,
@@ -23,6 +61,15 @@ async def list_question_packs(
     if status: filters["status"] = status
     return await service.get_all(skip=skip, limit=limit, filters=filters)
 
+@router.post("/", response_model=QuestionPackSchema)
+async def create_question_pack(
+    pack_in: QuestionPackCreate,
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: AsyncSession = Depends(get_session)
+):
+    service = QuestionPackService(db)
+    return await service.create_pack(pack_in, current_user.id)
+
 @router.get("/{pack_id}", response_model=QuestionPackSchema)
 async def get_question_pack(
     pack_id: str,
@@ -34,19 +81,10 @@ async def get_question_pack(
         raise HTTPException(status_code=404, detail="Question pack not found")
     return pack
 
-@router.post("/", response_model=QuestionPackSchema)
-async def create_question_pack(
-    pack_in: QuestionPackCreate,
-    current_user: User = Depends(require_role(UserRole.ADMIN)),
-    db: AsyncSession = Depends(get_session)
-):
-    service = QuestionPackService(db)
-    return await service.create_pack(pack_in, current_user.id)
-
 @router.patch("/{pack_id}", response_model=QuestionPackSchema)
 async def update_question_pack(
     pack_id: str,
-    pack_in: QuestionPackCreate, # Using Create for simplicity in schema
+    pack_in: QuestionPackCreate,
     current_user: User = Depends(require_role(UserRole.ADMIN)),
     db: AsyncSession = Depends(get_session)
 ):
@@ -77,37 +115,3 @@ async def add_question_to_pack(
 ):
     service = QuestionPackService(db)
     return await service.add_question(pack_id, question_in)
-
-@router.get("/questions", response_model=List[QuestionSchema])
-async def list_all_questions(
-    skip: int = 0,
-    limit: int = 100,
-    db: AsyncSession = Depends(get_session)
-):
-    service = QuestionPackService(db)
-    return await service.get_all_questions(skip=skip, limit=limit)
-
-@router.patch("/questions/{question_id}", response_model=QuestionSchema)
-async def update_question(
-    question_id: str,
-    question_in: QuestionCreate, # Using QuestionCreate for simplicity as patch usually takes a subset
-    current_user: User = Depends(require_role(UserRole.ADMIN)),
-    db: AsyncSession = Depends(get_session)
-):
-    service = QuestionPackService(db)
-    updated = await service.update_question(question_id, question_in.model_dump(exclude_unset=True))
-    if not updated:
-        raise HTTPException(status_code=404, detail="Question not found")
-    return updated
-
-@router.delete("/questions/{question_id}")
-async def delete_question(
-    question_id: str,
-    current_user: User = Depends(require_role(UserRole.ADMIN)),
-    db: AsyncSession = Depends(get_session)
-):
-    service = QuestionPackService(db)
-    success = await service.delete_question(question_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Question not found")
-    return {"status": "success"}

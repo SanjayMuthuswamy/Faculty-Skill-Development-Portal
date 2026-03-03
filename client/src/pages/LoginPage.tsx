@@ -6,11 +6,11 @@ import { z } from 'zod'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { BrainCircuit, GraduationCap, ShieldCheck, Sparkles, ArrowRight, User as UserIcon, Lock } from 'lucide-react'
+import { BrainCircuit, GraduationCap, ShieldCheck, Sparkles, ArrowRight, User as UserIcon, Lock, Eye, EyeOff } from 'lucide-react'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
+  password: z.string().optional().default(''),
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
@@ -20,6 +20,7 @@ const LoginPage = () => {
   const { login } = useAuth()
   const [error, setError] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const {
     register,
@@ -45,8 +46,8 @@ const LoginPage = () => {
 
   const handleDemoLogin = async (role: 'admin' | 'faculty') => {
     const credentials = {
-      admin: { email: 'admin@fsdp.com', password: 'Admin@123' },
-      faculty: { email: 'faculty@fsdp.com', password: 'Faculty@123' },
+      admin: { email: 'ms@gami.com', password: 'ms' },
+      faculty: { email: 'sanjay@mail.com', password: '123' },
     }
 
     const { email, password } = credentials[role]
@@ -149,7 +150,7 @@ const LoginPage = () => {
               </div>
               <Input
                 type="email"
-                placeholder="faculty@fsdp.com"
+                placeholder="faculty@example.com"
                 {...register('email')}
                 error={errors.email?.message}
                 className="rounded-2xl border-slate-200 px-5 focus:border-blue-500 h-14"
@@ -164,13 +165,23 @@ const LoginPage = () => {
                 </div>
                 <button type="button" className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">Reset Password</button>
               </div>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                {...register('password')}
-                error={errors.password?.message}
-                className="rounded-2xl border-slate-200 px-5 focus:border-blue-500 h-14"
-              />
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  {...register('password')}
+                  error={errors.password?.message}
+                  className="rounded-2xl border-slate-200 px-5 focus:border-blue-500 h-14 pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" isLoading={isLoading} className="w-full h-14 rounded-2xl text-base font-bold group bg-blue-600 hover:bg-blue-700 active:scale-[0.99] transition-all">

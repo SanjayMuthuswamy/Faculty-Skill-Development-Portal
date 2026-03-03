@@ -1,5 +1,5 @@
 import http from './http'
-import { storage } from '@/lib/storage/storage'
+import { storage } from '../storage/storage'
 
 interface LoginRequest {
   email: string

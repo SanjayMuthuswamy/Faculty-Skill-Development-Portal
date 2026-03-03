@@ -28,16 +28,13 @@ import app.models # Register models
 target_metadata = Base.metadata
 
 # Convert async database URL to sync for Alembic
-# Convert async database URL to sync for Alembic
 db_url = settings.DATABASE_URL
-if db_url.startswith("postgresql://"):
+if db_url.startswith("postgresql+asyncpg://"):
+    db_url = db_url.replace("postgresql+asyncpg://", "postgresql+psycopg://")
+elif db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+psycopg://")
 elif db_url.startswith("sqlite+aiosqlite://"):
     db_url = db_url.replace("sqlite+aiosqlite://", "sqlite://")
-elif not db_url.startswith("postgresql+"):
-    # Fallback for other postgres async drivers if any
-     if "postgresql" in db_url and "aiopg" in db_url:
-        db_url = db_url.replace("postgresql+psycopg+aiopg://", "postgresql+psycopg://")
 
 config.set_main_option("sqlalchemy.url", db_url)
 

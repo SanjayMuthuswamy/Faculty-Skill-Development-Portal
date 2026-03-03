@@ -6,6 +6,7 @@ import { questionPacksApi } from '../../lib/api/questionPacks';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { Difficulty } from '../../lib/api/tests';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { useToast } from '../../components/ui/Toast';
@@ -26,14 +27,14 @@ export default function DraftReview() {
         domain: SkillDomain;
         packName: string;
         topic: string;
-        difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+        difficulty: Difficulty;
         existingPackId?: string;
         description?: string;
     }>({
         domain: SkillDomain.TECHNOLOGY,
         packName: '',
         topic: '',
-        difficulty: 'MEDIUM',
+        difficulty: Difficulty.INTERMEDIATE,
     });
 
     const { data: draft, isLoading } = useQuery({
@@ -53,7 +54,7 @@ export default function DraftReview() {
             setPublishConfig(prev => ({
                 ...prev,
                 topic: draft.topic,
-                difficulty: draft.difficulty as any || 'MEDIUM'
+                difficulty: draft.difficulty as any || Difficulty.INTERMEDIATE
             }));
         }
     }, [draft]);
@@ -125,10 +126,10 @@ export default function DraftReview() {
                     </Button>
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight">Draft Review</h1>
-                        <p className="text-gray-500">
+                        <div className="text-gray-500 flex items-center gap-1">
                             Batch: <span className="font-medium text-gray-900">{draft.topic}</span> •
                             Status: <Badge className="ml-2 capitalize">{draft.status}</Badge>
-                        </p>
+                        </div>
                     </div>
                 </div>
                 {!isPublished && (
@@ -373,9 +374,9 @@ export default function DraftReview() {
                                             value={publishConfig.difficulty}
                                             onChange={(e) => setPublishConfig({ ...publishConfig, difficulty: e.target.value as any })}
                                         >
-                                            <option value="EASY">Easy</option>
-                                            <option value="MEDIUM">Medium</option>
-                                            <option value="HARD">Hard</option>
+                                            <option value={Difficulty.BEGINNER}>Beginner</option>
+                                            <option value={Difficulty.INTERMEDIATE}>Intermediate</option>
+                                            <option value={Difficulty.ADVANCED}>Advanced</option>
                                         </select>
                                     </div>
                                 </div>

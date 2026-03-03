@@ -15,7 +15,7 @@ class QuestionPackService:
         self.db = db
 
     async def get_all(self, skip: int = 0, limit: int = 100, filters: dict = {}) -> List[QuestionPack]:
-        query = select(QuestionPack).offset(skip).limit(limit)
+        query = select(QuestionPack).offset(skip).limit(limit).options(selectinload(QuestionPack.questions))
         
         if filters.get("domain"):
             query = query.where(QuestionPack.domain == filters["domain"])
@@ -30,26 +30,38 @@ class QuestionPackService:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_pack_by_name(self, domain: str, name: str) -> Optional[QuestionPack]:
+        query = select(QuestionPack).where(
+            QuestionPack.domain == domain,
+            QuestionPack.pack_name == name
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
     async def create_pack(self, pack_in: QuestionPackCreate, user_id: str) -> QuestionPack:
+        data = pack_in.model_dump() if hasattr(pack_in, "model_dump") else pack_in
         db_pack = QuestionPack(
             id=str(uuid4()),
             created_by_id=user_id,
-            **pack_in.model_dump()
+            **data
         )
         self.db.add(db_pack)
         await self.db.commit()
-        await self.db.refresh(db_pack)
-        return db_pack
+        
+        # Re-fetch with questions loaded
+        return await self.get_pack(db_pack.id) or db_pack
     
-    async def add_question(self, pack_id: str, question_in: QuestionCreate) -> Question:
+    async def add_question(self, pack_id: str, question_in: QuestionCreate, commit: bool = True) -> Question:
+        data = question_in.model_dump() if hasattr(question_in, "model_dump") else question_in
         db_question = Question(
             id=str(uuid4()),
             pack_id=pack_id,
-            **question_in.model_dump()
+            **data
         )
         self.db.add(db_question)
-        await self.db.commit()
-        await self.db.refresh(db_question)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(db_question)
         return db_question
 
     async def update_pack(self, pack_id: str, pack_in: dict) -> Optional[QuestionPack]:

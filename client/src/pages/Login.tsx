@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../app/providers/AuthProvider';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { useToast } from '../components/ui/Toast';
-import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, GraduationCap, ShieldCheck, Sparkles, Lock, User as UserIcon } from 'lucide-react';
+
+const CREDENTIALS = {
+    admin: { email: 'ms@email.com', password: '123456' },
+    faculty: { email: 'san@gmail.com', password: '1234567' },
+};
 
 const loginSchema = z.object({
     email: z.string().email('Invalid email address'),
@@ -19,104 +22,153 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function Login() {
     const { login } = useAuth();
     const { addToast } = useToast();
-    const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const emailRef = useRef<HTMLInputElement | null>(null);
 
     const {
         register,
         handleSubmit,
+        setValue,
         formState: { errors },
     } = useForm<LoginFormValues>({
         resolver: zodResolver(loginSchema),
-        defaultValues: {
-            email: 'faculty@fsdp.com',
-            password: 'Faculty@123',
-        },
+        defaultValues: { email: '', password: '' },
     });
+
+    const { ref: emailFormRef, ...emailRest } = register('email');
+
+    const fillCredentials = (role: 'admin' | 'faculty') => {
+        setValue('email', CREDENTIALS[role].email, { shouldValidate: true });
+        setValue('password', CREDENTIALS[role].password, { shouldValidate: true });
+    };
 
     const onSubmit = async (data: LoginFormValues) => {
         setIsLoading(true);
         try {
             await login(data.email, data.password);
             addToast('Login successful!', 'success');
-            // Navigation is handled by redirect logic or main app router listening to auth state
-            // But we can also force it here to be sure, or let the useEffect in a wrapper handle it
-            // Let's rely on the router/protected route redirection or do it here based on role
-            // Since login is void promise, we don't get the user back immediately in this scope unless we changed login signature
-            // But state update follows.
-        } catch (error) {
-            addToast('Invalid credentials. Try faculty@fsdp.com / Faculty@123', 'error');
+        } catch {
+            addToast('Invalid email or password. Please try again.', 'error');
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-            <Card className="w-full max-w-md">
-                <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl font-bold text-center text-blue-600">FSDP Login</CardTitle>
-                    <p className="text-center text-sm text-gray-500">
-                        Enter your email and password to access the portal
-                    </p>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                        <Input
-                            label="Email"
-                            type="email"
-                            placeholder="name@example.com"
-                            error={errors.email?.message}
-                            {...register('email')}
-                        />
-                        <Input
-                            label="Password"
-                            type="password"
-                            error={errors.password?.message}
-                            {...register('password')}
-                        />
-                        <Button type="submit" className="w-full" isLoading={isLoading}>
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 to-blue-50 px-4 py-12">
+            <div className="w-full max-w-md">
+                {/* Logo */}
+                <div className="flex items-center justify-center gap-3 mb-8">
+                    <div className="h-12 w-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/30">
+                        <GraduationCap className="h-7 w-7 text-white" />
+                    </div>
+                    <span className="text-2xl font-extrabold tracking-tight text-slate-900 uppercase">FSD Portal</span>
+                </div>
+
+                {/* Card */}
+                <div className="bg-white rounded-3xl shadow-xl border border-slate-100 p-8">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-1">Welcome back</h2>
+                    <p className="text-sm text-slate-500 mb-7">Sign in to your professional workspace</p>
+
+                    {/* Quick-fill chips */}
+                    <div className="flex gap-3 mb-6">
+                        <button
+                            type="button"
+                            onClick={() => fillCredentials('admin')}
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-600 hover:text-blue-700 text-sm font-semibold transition-all"
+                        >
+                            <ShieldCheck className="h-4 w-4" /> Admin
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => fillCredentials('faculty')}
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 text-slate-600 hover:text-amber-700 text-sm font-semibold transition-all"
+                        >
+                            <Sparkles className="h-4 w-4" /> Faculty
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" autoComplete="on">
+                        {/* Email */}
+                        <div>
+                            <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 mb-1.5">
+                                <UserIcon className="h-4 w-4 text-slate-400" /> Email
+                            </label>
+                            {/* datalist provides browser-native autocomplete suggestions */}
+                            <datalist id="email-suggestions">
+                                <option value={CREDENTIALS.admin.email} label="Admin" />
+                                <option value={CREDENTIALS.faculty.email} label="Faculty" />
+                            </datalist>
+                            <input
+                                {...emailRest}
+                                ref={(e) => {
+                                    emailFormRef(e);
+                                    emailRef.current = e;
+                                }}
+                                type="email"
+                                list="email-suggestions"
+                                autoComplete="email"
+                                placeholder="you@example.com"
+                                className={`w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all
+                                    ${errors.email
+                                        ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                                        : 'border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+                                    }`}
+                            />
+                            {errors.email && (
+                                <p className="text-xs text-rose-600 font-medium mt-1">{errors.email.message}</p>
+                            )}
+                        </div>
+
+                        {/* Password */}
+                        <div>
+                            <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 mb-1.5">
+                                <Lock className="h-4 w-4 text-slate-400" /> Password
+                            </label>
+                            <div className="relative">
+                                <input
+                                    {...register('password')}
+                                    type={showPassword ? 'text' : 'password'}
+                                    autoComplete="current-password"
+                                    placeholder="••••••••"
+                                    className={`w-full h-12 px-4 pr-12 rounded-xl border text-sm font-medium outline-none transition-all
+                                        ${errors.password
+                                            ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                                            : 'border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+                                        }`}
+                                />
+                                <button
+                                    type="button"
+                                    tabIndex={-1}
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                </button>
+                            </div>
+                            {errors.password && (
+                                <p className="text-xs text-rose-600 font-medium mt-1">{errors.password.message}</p>
+                            )}
+                        </div>
+
+                        <Button
+                            type="submit"
+                            isLoading={isLoading}
+                            className="w-full h-12 rounded-xl text-base font-bold bg-blue-600 hover:bg-blue-700 active:scale-[0.99] transition-all mt-2"
+                        >
                             Sign In
                         </Button>
                     </form>
 
-                    <div className="relative my-4">
-                        <div className="absolute inset-0 flex items-center">
-                            <span className="w-full border-t border-gray-300" />
-                        </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-white px-2 text-gray-500">Or continue with</span>
-                        </div>
+                    {/* Credential hint */}
+                    <div className="mt-6 p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 space-y-1">
+                        <p className="font-semibold text-slate-600 mb-1">Demo credentials</p>
+                        <p>🛡️ Admin: <span className="font-mono text-slate-700">{CREDENTIALS.admin.email}</span> / <span className="font-mono text-slate-700">{CREDENTIALS.admin.password}</span></p>
+                        <p>👨‍🏫 Faculty: <span className="font-mono text-slate-700">{CREDENTIALS.faculty.email}</span> / <span className="font-mono text-slate-700">{CREDENTIALS.faculty.password}</span></p>
                     </div>
-
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        onClick={async () => {
-                            setIsLoading(true);
-                            try {
-                                await login('faculty@fsdp.com', 'Faculty@123'); // Demo Google Login
-                                addToast('Google Login successful!', 'success');
-                            } catch (error) {
-                                addToast('Google Login failed', 'error');
-                            } finally {
-                                setIsLoading(false);
-                            }
-                        }}
-                        disabled={isLoading}
-                    >
-                        <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
-                            <path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
-                        </svg>
-                        Sign in with Google
-                    </Button>
-                    <div className="mt-4 text-center text-xs text-gray-500 space-y-1">
-                        <p>Admin: admin@fsdp.com / Admin@123</p>
-                        <p>Faculty: faculty@fsdp.com / Faculty@123</p>
-                    </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         </div>
     );
 }

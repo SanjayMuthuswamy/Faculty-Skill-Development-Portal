@@ -1,7 +1,5 @@
 from fastapi import APIRouter
 from app.api.v1.routes import (
-    auth, users, faculty, skills, programs, 
-    enrollments, question_packs, tests, 
     auth, users, faculty, skills, programs,
     enrollments, question_packs, tests,
     attempts, growth_plans, analytics, news, health, ai_questions,

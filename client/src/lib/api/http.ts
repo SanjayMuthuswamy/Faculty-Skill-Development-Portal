@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { storage } from '@/lib/storage/storage'
+import { storage } from '../storage/storage'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 

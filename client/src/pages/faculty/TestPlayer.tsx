@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '../../app/providers/AuthProvider';
@@ -19,6 +19,8 @@ export default function TestPlayer() {
     const [answers, setAnswers] = useState<Record<string, string>>({}); // questionId -> optionLetter ('A'|'B'|'C'|'D')
     const [timeLeft, setTimeLeft] = useState(0);
     const [attemptId, setAttemptId] = useState<string | null>(null);
+    // Prevent multiple attempt creations on re-renders (React StrictMode runs effects twice)
+    const attemptStarted = useRef(false);
 
     const { data: test, isLoading: isLoadingTest } = useQuery({
         queryKey: ['test', id],
@@ -28,20 +30,49 @@ export default function TestPlayer() {
 
     const testQuestions = test?.questions || [];
 
+    // BUG-8 fix: Initialize timer from the test's time_limit_minutes once test data loads
     useEffect(() => {
-        if (id && user && !attemptId) {
-            attemptsApi.createAttempt({ test_id: id }).then(res => {
-                setAttemptId(res.id);
-            });
+        if (test && timeLeft === 0) {
+            setTimeLeft(test.time_limit_minutes * 60);
         }
-    }, [id, user, attemptId]);
+    }, [test]);
 
+    // Create the attempt exactly once when the player mounts
     useEffect(() => {
-        if (timeLeft > 0) {
-            const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-            return () => clearInterval(timer);
-        }
-    }, [timeLeft]);
+        if (!id || !user || attemptStarted.current) return;
+        attemptStarted.current = true;  // Guard: prevent double-fire from React StrictMode or re-renders
+
+        attemptsApi.createAttempt({ test_id: id })
+            .then(res => {
+                setAttemptId(res.id);
+            })
+            .catch((err) => {
+                const detail = err?.response?.data?.detail || 'Failed to start test attempt';
+                addToast(detail, 'error');
+                navigate('/faculty/tests');
+            });
+    }, [id, user]);  // Only re-run if id or user changes (not attemptId)
+
+    // Countdown timer — auto-submit when time runs out
+    useEffect(() => {
+        if (timeLeft <= 0) return;
+        const timer = setInterval(() => setTimeLeft(prev => {
+            if (prev <= 1) {
+                clearInterval(timer);
+                // Auto-submit when time expires
+                if (attemptId && !submitMutation.isPending) {
+                    const mappedAnswers = Object.entries(answers).map(([qId, option]) => ({
+                        question_id: qId,
+                        selected_option: option
+                    }));
+                    submitMutation.mutate({ answers: mappedAnswers });
+                }
+                return 0;
+            }
+            return prev - 1;
+        }), 1000);
+        return () => clearInterval(timer);
+    }, [timeLeft, attemptId]);
 
     const submitMutation = useMutation({
         mutationFn: (data: { answers: { question_id: string; selected_option: string }[] }) =>

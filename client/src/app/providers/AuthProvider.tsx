@@ -47,6 +47,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Validate token by fetching current user from backend
         const meData = await authApi.getMe();
         const restoredUser = mapBackendUser(meData as unknown as Record<string, unknown>);
+
+        // Role consistency check: if localStorage has a different role than the server,
+        // the user switched accounts without logging out. Clear everything and re-login.
+        const cachedUser = storage.getUser() as { role?: string } | null;
+        if (cachedUser?.role && cachedUser.role !== restoredUser.role) {
+          console.warn(
+            `Session role mismatch: cached='${cachedUser.role}' server='${restoredUser.role}'. Clearing session.`
+          );
+          storage.clear();
+          setIsLoading(false);
+          return; // User will be redirected to /login by ProtectedRoute
+        }
+
         setUser(restoredUser);
         storage.setUser(restoredUser);
       } catch (error) {

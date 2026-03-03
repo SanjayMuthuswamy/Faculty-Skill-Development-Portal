@@ -2,10 +2,9 @@ import http from './http'
 import { SkillDomain } from './skills'
 
 export enum GrowthPlanStatus {
-    ACTIVE = "Active",
-    COMPLETED = "Completed",
-    PLANNING = "Planning",
-    PAUSED = "Paused",
+    ACTIVE = "ACTIVE",
+    COMPLETED = "COMPLETED",
+    RESET = "RESET",
 }
 
 export interface WeekTask {

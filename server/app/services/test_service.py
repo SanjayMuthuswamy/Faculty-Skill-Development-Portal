@@ -58,8 +58,38 @@ class TestService:
         return db_test
 
     async def get_all(self, skip: int = 0, limit: int = 100) -> List[Test]:
-        result = await self.db.execute(select(Test).offset(skip).limit(limit))
-        return result.scalars().all()
+        query = (
+            select(Test)
+            .offset(skip)
+            .limit(limit)
+            .options(
+                selectinload(Test.pack_links).selectinload(TestPack.pack).selectinload(QuestionPack.questions),
+                selectinload(Test.question_links).selectinload(TestQuestion.question)
+            )
+        )
+        result = await self.db.execute(query)
+        db_tests = result.scalars().all()
+        
+        # Populate questions for each test for serialization
+        for db_test in db_tests:
+            questions = []
+            seen_ids = set()
+            
+            for link in db_test.pack_links:
+                if link.pack:
+                    for q in link.pack.questions:
+                        if q.id not in seen_ids:
+                            questions.append(q)
+                            seen_ids.add(q.id)
+                            
+            for link in db_test.question_links:
+                if link.question and link.question.id not in seen_ids:
+                    questions.append(link.question)
+                    seen_ids.add(link.question.id)
+            
+            db_test.questions = questions
+            
+        return db_tests
 
     async def get_test(self, test_id: str) -> Optional[Test]:
         result = await self.db.execute(

@@ -14,7 +14,7 @@ class TestPackLink(BaseModel):
 
 class TestBase(BaseModel):
     title: str
-    description: Optional[str] = None
+    description: Optional[str] = None  # BUG-3 fix: description was missing from TestCreate payload
     domain: SkillDomain
     difficulty: Difficulty = Difficulty.BEGINNER
     pass_marks: int = 50

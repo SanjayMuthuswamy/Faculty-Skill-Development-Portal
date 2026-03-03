@@ -10,6 +10,7 @@ from app.models.faculty_profile import FacultyProfile
 from app.models.attempt import Attempt
 from app.models.faculty_skill import FacultySkill
 from app.models.growth_plan import GrowthPlan
+from app.models.performance_analysis import PerformanceAnalysis
 from app.schemas.analytics import FacultyAnalytics, DepartmentSummary
 
 class AnalyticsService:
@@ -83,9 +84,18 @@ class AnalyticsService:
         if not p:
             return None
         
+        # Get the latest performance analysis for this faculty's user
+        analysis_result = await self.db.execute(
+            select(PerformanceAnalysis)
+            .where(PerformanceAnalysis.user_id == p.user_id)
+            .order_by(PerformanceAnalysis.created_at.desc())
+            .limit(1)
+        )
+        latest_analysis = analysis_result.scalar_one_or_none()
+        
         avg_acc = 0.0
         if p.attempts:
-            avg_acc = sum(a.score or 0.0 for a in p.attempts) / len(p.attempts)
+            avg_acc = sum(a.accuracy or 0.0 for a in p.attempts) / len(p.attempts)
             
         active_plan = next((gp for gp in p.growth_plans if gp.status == "ACTIVE"), None)
         progress = active_plan.progress_percentage if active_plan else 0.0
@@ -99,5 +109,9 @@ class AnalyticsService:
             verified_skills_count=verified_count,
             attempts_count=len(p.attempts),
             avg_accuracy=avg_acc,
-            active_plan_progress=progress
+            active_plan_progress=progress,
+            top_gap=latest_analysis.weaknesses if latest_analysis else None,
+            strengths=latest_analysis.strengths if latest_analysis else None,
+            weaknesses=latest_analysis.weaknesses if latest_analysis else None,
+            recommendations=latest_analysis.recommendations if latest_analysis else []
         )

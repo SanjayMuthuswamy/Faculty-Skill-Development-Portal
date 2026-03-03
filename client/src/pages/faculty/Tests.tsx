@@ -1,20 +1,20 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../app/providers/AuthProvider';
-import { testsApi } from '../../lib/api/tests';
+import { testsApi, Difficulty } from '../../lib/api/tests';
 import { attemptsApi } from '../../lib/api/attempts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
-import { useNavigate } from 'react-router-dom';
 import { PlayCircle, Clock, Award, History, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function FacultyTests() {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [filterDifficulty, setFilterDifficulty] = useState<'ALL' | 'EASY' | 'MEDIUM' | 'HARD' | 'MIXED'>('ALL');
+    const [filterDifficulty, setFilterDifficulty] = useState<'ALL' | Difficulty>('ALL');
 
     const { data: tests, isLoading: isLoadingTests } = useQuery({
         queryKey: ['tests'],
@@ -49,10 +49,9 @@ export default function FacultyTests() {
                     onChange={(e) => setFilterDifficulty(e.target.value as any)}
                 >
                     <option value="ALL">Any Difficulty</option>
-                    <option value="EASY">Easy</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HARD">Hard</option>
-                    <option value="MIXED">Mixed</option>
+                    <option value={Difficulty.BEGINNER}>Beginner</option>
+                    <option value={Difficulty.INTERMEDIATE}>Intermediate</option>
+                    <option value={Difficulty.ADVANCED}>Advanced</option>
                 </select>
             </div>
 
@@ -64,7 +63,7 @@ export default function FacultyTests() {
                         <CardHeader>
                             <div className="flex justify-between items-start">
                                 <Badge variant="outline">{test.domain}</Badge>
-                                <Badge variant={test.difficulty === 'EASY' ? 'success' : test.difficulty === 'MEDIUM' ? 'warning' : test.difficulty === 'HARD' ? 'destructive' : 'secondary'}>
+                                <Badge variant={test.difficulty === Difficulty.BEGINNER ? 'success' : test.difficulty === Difficulty.INTERMEDIATE ? 'warning' : 'destructive'}>
                                     {test.difficulty}
                                 </Badge>
                             </div>
@@ -119,7 +118,7 @@ export default function FacultyTests() {
                             ) : attempts?.slice().reverse().map((attempt) => (
                                 <TableRow key={attempt.id}>
                                     <TableCell className="font-medium">{attempt.test_title || getTestTitle(attempt.test_id)}</TableCell>
-                                    <TableCell>{format(new Date(attempt.completed_at), 'MMM d, yyyy h:mm a')}</TableCell>
+                                    <TableCell>{format(new Date(attempt.submitted_at || attempt.started_at), 'MMM d, yyyy h:mm a')}</TableCell>
                                     <TableCell>
                                         <span className={(attempt.accuracy || 0) >= 70 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
                                             {Math.round(attempt.accuracy || 0)}%

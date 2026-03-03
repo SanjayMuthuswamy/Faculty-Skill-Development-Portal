@@ -3,9 +3,13 @@ import { SkillDomain } from './skills'
 import { Question } from './questionPacks'
 
 export enum Difficulty {
-    BEGINNER = "Beginner",
-    INTERMEDIATE = "Intermediate",
-    ADVANCED = "Advanced",
+    BEGINNER = "BEGINNER",
+    INTERMEDIATE = "INTERMEDIATE",
+    ADVANCED = "ADVANCED",
+    EASY = "EASY",
+    MEDIUM = "MEDIUM",
+    HARD = "HARD",
+    MIXED = "MIXED",
 }
 
 export interface Test {

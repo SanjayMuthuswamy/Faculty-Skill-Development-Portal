@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../app/providers/AuthProvider';
-import { testsApi } from '../../lib/api/tests';
+import { testsApi, Difficulty } from '../../lib/api/tests';
 import { attemptsApi } from '../../lib/api/attempts';
 import { practiceSetsApi } from '../../lib/api/practiceSets';
 import { SkillDomain } from '../../lib/api/skills';
@@ -32,7 +32,7 @@ export default function Practice() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<TabType>('tests');
-    const [filterDifficulty, setFilterDifficulty] = useState<'ALL' | 'EASY' | 'MEDIUM' | 'HARD' | 'MIXED'>('ALL');
+    const [filterDifficulty, setFilterDifficulty] = useState<'ALL' | Difficulty>('ALL');
 
     // AI Sandbox Form State
     const [sandboxDomain, setSandboxDomain] = useState<SkillDomain>(SkillDomain.AI);
@@ -146,10 +146,9 @@ export default function Practice() {
                                 onChange={(e) => setFilterDifficulty(e.target.value as any)}
                             >
                                 <option value="ALL">Any Difficulty</option>
-                                <option value="EASY">Easy</option>
-                                <option value="MEDIUM">Medium</option>
-                                <option value="HARD">Hard</option>
-                                <option value="MIXED">Mixed</option>
+                                <option value={Difficulty.BEGINNER}>Beginner</option>
+                                <option value={Difficulty.INTERMEDIATE}>Intermediate</option>
+                                <option value={Difficulty.ADVANCED}>Advanced</option>
                             </select>
                         </div>
                         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -160,7 +159,7 @@ export default function Practice() {
                                     <CardHeader>
                                         <div className="flex justify-between items-start">
                                             <Badge variant="outline">{test.domain}</Badge>
-                                            <Badge variant={test.difficulty === 'EASY' ? 'success' : test.difficulty === 'MEDIUM' ? 'warning' : test.difficulty === 'HARD' ? 'destructive' : 'secondary'}>
+                                            <Badge variant={test.difficulty === Difficulty.BEGINNER ? 'success' : test.difficulty === Difficulty.INTERMEDIATE ? 'warning' : 'destructive'}>
                                                 {test.difficulty}
                                             </Badge>
                                         </div>

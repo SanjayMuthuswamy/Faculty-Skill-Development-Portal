@@ -29,10 +29,6 @@ export default function AdminDashboard() {
         queryFn: () => facultyApi.listProfiles(),
     });
 
-    if (isLoadingDept || isLoadingFaculty) {
-        return <div className="p-8 text-center text-gray-400">Loading dashboard data...</div>;
-    }
-
     // Aggregated Metrics
     const metrics = useMemo(() => {
         if (!departmentStats) return { total: 0, highRisk: 0, avgProb: 0, verifiedSkills: 0 };
@@ -85,6 +81,10 @@ export default function AdminDashboard() {
             { name: 'Unverified', value: Math.round((100 - avgVerifiedRate) * 0.4), fill: '#ef4444' }
         ];
     }, [departmentStats]);
+
+    if (isLoadingDept || isLoadingFaculty) {
+        return <div className="p-8 text-center text-gray-400">Loading dashboard data...</div>;
+    }
 
     return (
         <div className="space-y-8 pb-12">

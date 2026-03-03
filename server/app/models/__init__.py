@@ -16,4 +16,6 @@ from .growth_week import GrowthWeek
 from .week_task import WeekTask
 from .news_cache import NewsCache
 from .faculty_news_preferences import FacultyNewsPreferences
-# Add other models if I missed any from the list_dir
+from .performance_analysis import PerformanceAnalysis
+from .practice_set import PracticeSet, PracticeSetQuestion
+from .question_draft import QuestionDraft, QuestionDraftBatch, DraftBatchStatus, QuestionDraftStatus

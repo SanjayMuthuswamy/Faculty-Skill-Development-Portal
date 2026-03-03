@@ -61,6 +61,11 @@ class AttemptStatus(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     SUBMITTED = "SUBMITTED"
 
+class PerformanceAnalysisStatus(str, Enum):
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
 class QuestionOption(str, Enum):
     A = "A"
     B = "B"

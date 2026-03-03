@@ -10,9 +10,12 @@ from app.models.question import Question
 from app.models.question_pack import QuestionPack
 from app.schemas.practice_set import PracticeSetCreate, PracticeSetResultSubmit
 
+from app.services.llm_service import LLMService
+
 class PracticeSetService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.llm = LLMService()
 
     async def generate_set(self, faculty_id: str, set_in: PracticeSetCreate) -> PracticeSet:
         # 1. Create the PracticeSet record
@@ -34,9 +37,7 @@ class PracticeSetService:
             query = select(Question).join(QuestionPack).where(
                 QuestionPack.domain == set_in.domain
             )
-            if set_in.difficulty != "MIXED":
-                # Note: Assuming Question model has difficulty, or we use Pack difficulty
-                pass # For now, just get questions from packs in that domain
+            # Add difficulty filter if needed in future
             
             result = await self.db.execute(query.limit(set_in.count))
             source_questions = result.scalars().all()
@@ -55,20 +56,41 @@ class PracticeSetService:
                 ))
         
         elif set_in.source == "CUSTOM":
-            # Generate mock AI questions based on topic
-            topic = set_in.topic or "General Knowledge"
-            for i in range(set_in.count):
-                questions_to_add.append(PracticeSetQuestion(
-                    id=str(uuid4()),
-                    set_id=db_set.id,
-                    question_text=f"Custom Question {i+1} about {topic}: What is true about this topic?",
-                    option_a="A) Option Alpha",
-                    option_b="B) Option Beta",
-                    option_c="C) Option Gamma",
-                    option_d="D) Option Delta",
-                    correct_option="A",
-                    explanation=f"This is a generated explanation for {topic}."
-                ))
+            # Generate real AI questions based on topic
+            topic = set_in.topic or "Professional Development"
+            ai_response = await self.llm.generate_practice_questions(
+                topic=topic,
+                difficulty=set_in.difficulty,
+                count=set_in.count
+            )
+
+            if ai_response and ai_response.questions:
+                for q_ai in ai_response.questions:
+                    questions_to_add.append(PracticeSetQuestion(
+                        id=str(uuid4()),
+                        set_id=db_set.id,
+                        question_text=q_ai.question_text,
+                        option_a=q_ai.option_a,
+                        option_b=q_ai.option_b,
+                        option_c=q_ai.option_c,
+                        option_d=q_ai.option_d,
+                        correct_option=q_ai.correct_option,
+                        explanation=q_ai.explanation
+                    ))
+            else:
+                # Fallback to mock AI questions
+                for i in range(set_in.count):
+                    questions_to_add.append(PracticeSetQuestion(
+                        id=str(uuid4()),
+                        set_id=db_set.id,
+                        question_text=f"Sample AI Question {i+1} about {topic}: What is the core principle?",
+                        option_a="A) Concept Alpha",
+                        option_b="B) Concept Beta",
+                        option_c="C) Concept Gamma",
+                        option_d="D) Concept Delta",
+                        correct_option="A",
+                        explanation=f"This is a fallback placeholder explanation for {topic}."
+                    ))
         
         if not questions_to_add:
             # Fallback if no questions found

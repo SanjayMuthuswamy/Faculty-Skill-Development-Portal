@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { growthPlansApi } from '../../lib/api/growthPlans';
-import { skillsApi } from '../../lib/api/skills';
+import { skillsApi, SkillDomain } from '../../lib/api/skills';
 import { api } from '../../lib/api/mockApi'; // Keep for careerGoals
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -140,9 +140,18 @@ export default function AIGrowthPlan() {
     const handleGenerate = () => {
         if (!user || !selectedSkill) return;
 
+        // Map shorthand domain to backend SkillDomain
+        const domainMap: Record<string, SkillDomain> = {
+            'AI': SkillDomain.AI,
+            'CLOUD': SkillDomain.CLOUD,
+            'CYBERSECURITY': SkillDomain.CYBER,
+            'DBMS': SkillDomain.TECHNOLOGY,
+            'PEDAGOGY': SkillDomain.TEACHING
+        };
+
         createPlanMutation.mutate({
             facultyId: user.id,
-            domain: selectedDomain || 'AI', // Fallback for safety
+            domain: domainMap[selectedDomain] || SkillDomain.TECHNOLOGY,
             skill: selectedSkill,
             currentLevel,
             targetLevel,

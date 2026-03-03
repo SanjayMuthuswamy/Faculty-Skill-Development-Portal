@@ -1,10 +1,12 @@
 
 import http from './http';
 import { SkillDomain } from './skills';
+import { Difficulty } from './tests';
 
 export enum DraftBatchStatus {
     PENDING = 'pending',
     PUBLISHED = 'published',
+    FAILED = 'failed',
 }
 
 export enum QuestionDraftStatus {
@@ -30,7 +32,7 @@ export interface QuestionDraftBatch {
     id: string;
     topic: string;
     domain: SkillDomain;
-    difficulty: string;
+    difficulty: Difficulty;
     status: DraftBatchStatus;
     created_by_id: string;
     created_at: string;
@@ -40,7 +42,7 @@ export interface QuestionDraftBatch {
 export interface QuestionDraftBatchCreate {
     topic: string;
     domain: SkillDomain;
-    difficulty: string;
+    difficulty: Difficulty;
     prompt: string;
     count?: number;
 }
@@ -49,7 +51,7 @@ export interface PublishConfig {
     domain: SkillDomain;
     packName?: string;
     topic: string;
-    difficulty: string;
+    difficulty: Difficulty;
     existingPackId?: string;
     description?: string;
 }

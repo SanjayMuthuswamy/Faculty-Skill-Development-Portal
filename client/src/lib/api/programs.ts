@@ -11,10 +11,10 @@ export enum ProgramStatus {
 }
 
 export enum EnrollmentStatus {
-    ENROLLED = "Enrolled",
-    IN_PROGRESS = "In Progress",
-    COMPLETED = "Completed",
-    DROPPED = "Dropped",
+    ENROLLED = "ENROLLED",
+    CANCELLED = "CANCELLED",
+    COMPLETED = "COMPLETED",
+    DROPPED = "DROPPED",
 }
 
 export interface Enrollment {

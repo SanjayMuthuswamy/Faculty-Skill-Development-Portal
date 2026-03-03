@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import Optional, List
 from uuid import uuid4
+import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -12,18 +13,26 @@ from app.models.growth_week import GrowthWeek
 from app.models.week_task import WeekTask
 from app.schemas.growth_plan import GrowthPlanCreate
 
+from app.services.llm_service import LLMService
+
+logger = logging.getLogger(__name__)
+
 class GrowthPlanService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.llm = LLMService()
 
     async def create_plan(self, faculty_id: str, plan_in: GrowthPlanCreate) -> GrowthPlan:
-        # Check active plan
-        active_res = await self.db.execute(select(GrowthPlan).where(
+        # Check active plan - use .first() to avoid MultipleResultsFound crash
+        active_res = await self.db.execute(select(GrowthPlan).filter(
             GrowthPlan.faculty_id == faculty_id,
             GrowthPlan.status == GrowthPlanStatus.ACTIVE
         ))
-        if active_res.scalar_one_or_none():
+        existing = active_res.scalars().first()
+        if existing:
             raise ValueError("Faculty already has an active growth plan.")
+
+        logger.info(f"--- [GrowthPlan] Creating plan for faculty={faculty_id}, skill={plan_in.target_skill} ---")
 
         plan = GrowthPlan(
             id=str(uuid4()),
@@ -33,36 +42,71 @@ class GrowthPlanService:
         )
         self.db.add(plan)
         
-        # Generate 4 weeks (simple logic for now)
-        for i in range(1, 5):
-            week = GrowthWeek(
-                id=str(uuid4()),
-                plan_id=plan.id,
-                week_number=i,
-                title=f"Week {i}: {plan_in.target_skill} Fundamentals",
-                required_practice_count=3,
-                required_min_avg_score=60.0
-            )
-            self.db.add(week)
-            
-            # Add tasks
-            tasks = [
-                f"Read documentation on {plan_in.target_skill}",
-                f"Complete 3 practice tests",
-                f"Review mistakes from previous attempts"
-            ]
-            for t_label in tasks:
-                task = WeekTask(
+        # Try AI generation first
+        roadmap = await self.llm.generate_roadmap(
+            skill=plan_in.target_skill,
+            domain=plan_in.domain,
+            current_level=plan_in.current_level,
+            target_level=plan_in.target_level,
+            weekly_hours=plan_in.weekly_hours
+        )
+
+        if roadmap and roadmap.weeks:
+            logger.info(f"--- [GrowthPlan] AI generated {len(roadmap.weeks)} weeks ---")
+            # Use AI generated roadmap
+            for i, week_ai in enumerate(roadmap.weeks):
+                week = GrowthWeek(
                     id=str(uuid4()),
-                    week_id=week.id,
-                    label=t_label,
-                    done=False
+                    plan_id=plan.id,
+                    week_number=i + 1,
+                    title=week_ai.title,
+                    required_practice_count=week_ai.required_practice_count,
+                    required_min_avg_score=week_ai.required_min_avg_score
                 )
-                self.db.add(task)
+                self.db.add(week)
+                
+                for t_label in week_ai.tasks:
+                    task = WeekTask(
+                        id=str(uuid4()),
+                        week_id=week.id,
+                        label=t_label,
+                        done=False
+                    )
+                    self.db.add(task)
+        else:
+            logger.warning("--- [GrowthPlan] AI roadmap failed, using fallback template ---")
+            # Fallback to simple logic
+            for i in range(1, 5):
+                week = GrowthWeek(
+                    id=str(uuid4()),
+                    plan_id=plan.id,
+                    week_number=i,
+                    title=f"Week {i}: {plan_in.target_skill} Fundamentals",
+                    required_practice_count=3,
+                    required_min_avg_score=60.0
+                )
+                self.db.add(week)
+                
+                tasks = [
+                    f"Read documentation on {plan_in.target_skill}",
+                    f"Complete 3 practice tests",
+                    f"Review mistakes from previous attempts"
+                ]
+                for t_label in tasks:
+                    task = WeekTask(
+                        id=str(uuid4()),
+                        week_id=week.id,
+                        label=t_label,
+                        done=False
+                    )
+                    self.db.add(task)
                 
         await self.db.commit()
         await self.db.refresh(plan)
-        return plan
+        
+        logger.info(f"--- [GrowthPlan] Plan {plan.id} created and committed ---")
+        # Re-fetch with relationships loaded to avoid lazy-loading issues in async context
+        return await self.get_plan_by_id(plan.id)
 
     async def get_active_plan(self, faculty_id: str) -> Optional[GrowthPlan]:
         result = await self.db.execute(
@@ -71,8 +115,9 @@ class GrowthPlanService:
             .options(
                 selectinload(GrowthPlan.weeks).selectinload(GrowthWeek.tasks)
             )
+            .order_by(GrowthPlan.created_at.desc())
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_plan_by_id(self, plan_id: str) -> Optional[GrowthPlan]:
         result = await self.db.execute(

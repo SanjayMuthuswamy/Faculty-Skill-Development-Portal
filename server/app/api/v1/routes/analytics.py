@@ -9,6 +9,8 @@ from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(tags=["analytics"])
 
+# ── Static routes MUST come before /{faculty_id} to avoid routing conflicts ──
+
 @router.get("/department-summary", response_model=List[DepartmentSummary])
 async def get_department_summary(
     current_user: User = Depends(get_current_user),
@@ -19,6 +21,22 @@ async def get_department_summary(
         
     service = AnalyticsService(db)
     return await service.get_department_summary()
+
+@router.get("/me", response_model=FacultyAnalytics)
+async def get_my_analytics(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    if not current_user.faculty_profile:
+        raise HTTPException(status_code=400, detail="User has no faculty profile")
+        
+    service = AnalyticsService(db)
+    analytics = await service.get_faculty_analytics(current_user.faculty_profile.id)
+    if not analytics:
+        raise HTTPException(status_code=404, detail="Analytics not found")
+    return analytics
+
+# ── Dynamic param route LAST ──
 
 @router.get("/faculty/{faculty_id}", response_model=FacultyAnalytics)
 async def get_faculty_analytics(
@@ -35,18 +53,4 @@ async def get_faculty_analytics(
     analytics = await service.get_faculty_analytics(faculty_id)
     if not analytics:
         raise HTTPException(status_code=404, detail="Faculty analytics not found")
-    return analytics
-
-@router.get("/me", response_model=FacultyAnalytics)
-async def get_my_analytics(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_session)
-):
-    if not current_user.faculty_profile:
-        raise HTTPException(status_code=400, detail="User has no faculty profile")
-        
-    service = AnalyticsService(db)
-    analytics = await service.get_faculty_analytics(current_user.faculty_profile.id)
-    if not analytics:
-        raise HTTPException(status_code=404, detail="Analytics not found")
     return analytics

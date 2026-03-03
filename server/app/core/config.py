@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Database
-    DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/fsdp_db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:123456789@127.0.0.1:5432/fsdp_db"
 
     # JWT Configuration
     JWT_ACCESS_SECRET: str
@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     NEWSDATA_API_KEY: str | None = None
     NEWSDATA_BASE_URL: str = "https://newsdata.io/api/1/latest"
     NEWS_CACHE_TTL_SECONDS: int = 21600  # 6 hours
+
+    # OpenRouter AI
+    OPENROUTER_API_KEY: str | None = None
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
+    OPENROUTER_MODEL: str = "openrouter/auto"
+    LLM_TIMEOUT_SECONDS: int = 60
+    LLM_MAX_RETRIES: int = 2
 
     model_config = SettingsConfigDict(
         env_file=".env",

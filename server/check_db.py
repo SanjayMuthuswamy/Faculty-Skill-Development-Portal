@@ -1,26 +1,21 @@
+import sys
+sys.path.insert(0, '.')
 
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
-import os
-from dotenv import load_dotenv
+from app.core.config import settings
 
 async def check():
-    load_dotenv()
-    url = os.getenv("DATABASE_URL")
-    print(f"Connecting to {url}...")
-    engine = create_async_engine(url)
-    try:
-        async with engine.connect() as conn:
-            result = await conn.execute(text("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'"))
-            tables = result.fetchall()
-            print("Tables found:")
-            for table in tables:
-                print(f" - {table[0]}")
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        await engine.dispose()
+    engine = create_async_engine(settings.DATABASE_URL, echo=False)
+    async with engine.connect() as conn:
+        result = await conn.execute(text("SELECT email, role, is_active FROM users ORDER BY role"))
+        rows = result.fetchall()
+        print("\n=== USERS IN DATABASE ===")
+        for row in rows:
+            email, role, active = row
+            print(f"  email={email!r}  role={role!r}  active={active}")
+        print(f"=========================\n")
+    await engine.dispose()
 
-if __name__ == "__main__":
-    asyncio.run(check())
+asyncio.run(check())

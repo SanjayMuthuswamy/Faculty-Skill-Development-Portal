@@ -16,7 +16,7 @@ async def list_tests(
     db: AsyncSession = Depends(get_session)
 ):
     service = TestService(db)
-    return await service.get_multi(skip=skip, limit=limit)
+    return await service.get_all(skip=skip, limit=limit)  # was incorrectly get_multi
 
 @router.post("/", response_model=TestSchema)
 async def create_test(
@@ -25,7 +25,9 @@ async def create_test(
     db: AsyncSession = Depends(get_session)
 ):
     service = TestService(db)
-    return await service.create_test(test_in, current_user.id)
+    test = await service.create_test(test_in, current_user.id)
+    # Re-fetch with questions loaded via selectinload
+    return await service.get_test(test.id) or test
 
 @router.get("/{test_id}", response_model=TestSchema)
 async def get_test(
@@ -41,7 +43,7 @@ async def get_test(
 @router.patch("/{test_id}", response_model=TestSchema)
 async def update_test(
     test_id: str,
-    test_in: dict, # Simplified for now
+    test_in: dict,
     current_user: User = Depends(require_role(UserRole.ADMIN)),
     db: AsyncSession = Depends(get_session)
 ):

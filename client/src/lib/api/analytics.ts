@@ -8,6 +8,10 @@ export interface FacultyAnalytics {
     attempts_count: number;
     avg_accuracy: number;
     active_plan_progress: number;
+    top_gap?: string;
+    strengths?: string;
+    weaknesses?: string;
+    recommendations?: string[];
 }
 
 export interface DepartmentSummary {

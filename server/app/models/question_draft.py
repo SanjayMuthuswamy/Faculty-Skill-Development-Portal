@@ -9,6 +9,7 @@ import enum
 class DraftBatchStatus(str, enum.Enum):
     PENDING = "pending"
     PUBLISHED = "published"
+    FAILED = "failed"
 
 class QuestionDraftStatus(str, enum.Enum):
     PENDING = "pending"
@@ -23,6 +24,7 @@ class QuestionDraftBatch(Base):
     domain: Mapped[str] = mapped_column(String, nullable=False)
     difficulty: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[DraftBatchStatus] = mapped_column(String, default=DraftBatchStatus.PENDING)
+    prompt_version: Mapped[str] = mapped_column(String, default="1.0", nullable=False)
     
     created_by_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -16,6 +16,10 @@ class FacultyAnalytics(BaseModel):
     attempts_count: int
     avg_accuracy: float
     active_plan_progress: float
+    top_gap: Optional[str] = None
+    strengths: Optional[str] = None
+    weaknesses: Optional[str] = None
+    recommendations: List[str] = []
 
 class DepartmentSummary(BaseModel):
     department: str

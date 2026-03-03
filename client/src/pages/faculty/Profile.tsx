@@ -1,7 +1,9 @@
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { facultyApi, SkillStatus } from '../../lib/api/faculty';
-import { skillsApi, SkillDomain } from '../../lib/api/skills';
+import http from '../../lib/api/http';
+import { SkillDomain } from '../../lib/api/skills';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -18,10 +20,60 @@ import {
     Trash2,
     Edit2,
     CheckCircle2,
-    AlertCircle
+    AlertCircle,
+    Sparkles,
+    RefreshCw,
+    Loader2
 } from 'lucide-react';
 import { FacultySkill } from '../../lib/types';
 import { cn } from '../../lib/utils';
+
+function SkillSuggestions() {
+    const { data: suggestions, isLoading, refetch, isFetching } = useQuery({
+        queryKey: ['skill-suggestions'],
+        queryFn: () => facultyApi.getSkillSuggestions(),
+        staleTime: 1000 * 60 * 30, // 30 mins
+    });
+
+    if (isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-8 space-y-3">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                <p className="text-xs text-gray-500 font-medium">Analyzing profile...</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            <div className="space-y-2">
+                {suggestions?.suggested_skills.map((skill, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-white/60 border border-white shadow-sm">
+                        <div className="h-2 w-2 rounded-full bg-indigo-500" />
+                        <span className="text-sm font-semibold text-gray-800">{skill}</span>
+                    </div>
+                ))}
+            </div>
+
+            <div className="p-3 rounded-xl bg-indigo-100/50 border border-indigo-200/50">
+                <p className="text-[11px] text-indigo-800 leading-relaxed font-medium">
+                    "{suggestions?.reasoning}"
+                </p>
+            </div>
+
+            <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-[10px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-100/50 h-8 gap-1.5"
+                onClick={() => refetch()}
+                disabled={isFetching}
+            >
+                <RefreshCw className={cn("h-3 w-3", isFetching && "animate-spin")} />
+                REFRESH SUGGESTIONS
+            </Button>
+        </div>
+    );
+}
 
 export default function FacultyProfile() {
     const { user } = useAuth();
@@ -30,7 +82,7 @@ export default function FacultyProfile() {
     const [isSkillModalOpen, setIsSkillModalOpen] = useState(false);
     const [editingSkill, setEditingSkill] = useState<any | null>(null);
 
-    const { data: profile, isLoading: isLoadingProfile } = useQuery({
+    const { data: profile } = useQuery({
         queryKey: ['faculty-profile', 'me'],
         queryFn: () => facultyApi.getMe(),
         enabled: !!user,
@@ -52,9 +104,7 @@ export default function FacultyProfile() {
 
     const updateSkillMutation = useMutation({
         mutationFn: (data: { id: string; updates: { level: number } }) =>
-            // In a real app we might have a specific update skill endpoint or use a general one
-            // For now, let's assume we use a general one if available or mock it
-            Promise.resolve(),
+            http.patch(`/api/v1/question-packs/questions/${data.id}`, data.updates).then(r => r.data),
         onSuccess: () => {
             addToast('Skill updated successfully', 'success');
             queryClient.invalidateQueries({ queryKey: ['faculty-profile', 'me'] });
@@ -62,16 +112,17 @@ export default function FacultyProfile() {
             setEditingSkill(null);
             reset();
         },
+        onError: () => addToast('Failed to update skill', 'error'),
     });
 
     const deleteSkillMutation = useMutation({
         mutationFn: (id: string) =>
-            // Mock delete for now if not in API
-            Promise.resolve(),
+            http.delete(`/api/v1/faculty/me/skills/${id}`).then(r => r.data),
         onSuccess: () => {
             addToast('Skill removed', 'info');
             queryClient.invalidateQueries({ queryKey: ['faculty-profile', 'me'] });
         },
+        onError: () => addToast('Failed to remove skill', 'error'),
     });
 
     const onSubmit = (data: any) => {
@@ -80,7 +131,7 @@ export default function FacultyProfile() {
         } else {
             addSkillMutation.mutate({
                 skill_name: data.name,
-                domain: data.category === 'technical' ? SkillDomain.TECHNOLOGY : SkillDomain.PEDAGOGY, // Simplified mapping
+                domain: data.category === 'technical' ? SkillDomain.TECHNOLOGY : SkillDomain.TEACHING, // Simplified mapping
                 level: parseInt(data.level)
             });
         }
@@ -88,9 +139,8 @@ export default function FacultyProfile() {
 
     const handleEdit = (skill: any) => {
         setEditingSkill(skill);
-        setValue('name', skill.skill.name);
-        // setValue('category', ...); // Map domain back if needed
-        setValue('level', skill.level.toString() as any);
+        setValue('name' as any, skill.skill?.name ?? skill.name ?? '');
+        setValue('level' as any, String(skill.level));
         setIsSkillModalOpen(true);
     };
 
@@ -130,6 +180,19 @@ export default function FacultyProfile() {
                             <span>{profile?.experience_years || 0} Years Experience</span>
                         </div>
                         <Button variant="outline" className="w-full mt-4">Edit Profile</Button>
+                    </CardContent>
+                </Card>
+
+                {/* AI Skill Suggestions */}
+                <Card className="md:col-span-1 h-fit bg-gradient-to-br from-indigo-50/50 to-blue-50/50 border-indigo-100">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-indigo-700">
+                            <Sparkles className="h-5 w-5" /> AI Recommendations
+                        </CardTitle>
+                        <CardDescription>Based on your profile and expertise</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <SkillSuggestions />
                     </CardContent>
                 </Card>
 

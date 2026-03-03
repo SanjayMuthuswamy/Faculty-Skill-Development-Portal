@@ -9,6 +9,7 @@ import FacultyPrograms from './pages/faculty/Programs';
 import ProgramDetails from './pages/faculty/ProgramDetails';
 import Practice from './pages/faculty/Practice';
 import PracticePlayer from './pages/faculty/PracticePlayer';
+import FacultyTests from './pages/faculty/Tests';
 import TestPlayer from './pages/faculty/TestPlayer';
 import TestResult from './pages/faculty/TestResult';
 import FacultyProfile from './pages/faculty/Profile';
@@ -49,6 +50,7 @@ function AppRoutes() {
         <Route path="programs/:programId" element={<ProgramDetails />} />
         <Route path="practice" element={<Practice />} />
         <Route path="practice/play/:setId" element={<PracticePlayer />} />
+        <Route path="tests" element={<FacultyTests />} />   {/* Faculty Tests list */}
         <Route path="tests/:id/play" element={<TestPlayer />} />
         <Route path="tests/:id/result/:attemptId" element={<TestResult />} />
         <Route path="profile" element={<FacultyProfile />} />

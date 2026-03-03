@@ -4,6 +4,19 @@ from typing import Optional, List
 
 from pydantic import BaseModel
 
+
+# Minimal user info embedded in faculty profile responses
+class UserBase(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
 class FacultyProfileBase(BaseModel):
     department: Optional[str] = None
     designation: Optional[str] = None
@@ -24,4 +37,17 @@ class FacultyProfileInDBBase(FacultyProfileBase):
         from_attributes = True
 
 class FacultyProfile(FacultyProfileInDBBase):
-    pass
+    user: Optional[UserBase] = None
+    skills: List = []  # List[FacultySkill] — use List to avoid circular import; FastAPI handles ORM objects
+
+class FacultyCreateRequest(BaseModel):
+    name: str
+    email: str
+    department: str
+    designation: str
+    experience_years: int
+    password: str  # Admin provided temporary password
+
+class SkillSuggestions(BaseModel):
+    suggested_skills: List[str]
+    reasoning: str

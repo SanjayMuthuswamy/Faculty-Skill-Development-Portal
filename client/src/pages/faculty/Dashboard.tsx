@@ -44,10 +44,12 @@ export default function FacultyDashboard() {
     });
 
     const completedPrograms = enrollments?.filter(e => e.status === EnrollmentStatus.COMPLETED).length || 0;
-    const activePrograms = enrollments?.filter(e => e.status === EnrollmentStatus.ENROLLED || e.status === EnrollmentStatus.IN_PROGRESS).length || 0;
+    // BUG-FIX: EnrollmentStatus.IN_PROGRESS does not exist; the enum only has ENROLLED/CANCELLED/COMPLETED/DROPPED
+    const activePrograms = enrollments?.filter(e => e.status === EnrollmentStatus.ENROLLED).length || 0;
 
+    // BUG-FIX: `score` is a raw correct-answer count; `accuracy` is the percentage — use accuracy for display
     const avgScore = attempts && attempts.length > 0
-        ? Math.round(attempts.reduce((acc, curr) => acc + curr.score, 0) / attempts.length)
+        ? Math.round(attempts.reduce((acc, curr) => acc + (curr.accuracy || 0), 0) / attempts.length)
         : 0;
 
     const verifiedSkillsCount = profile?.skills?.filter(s => s.status === SkillStatus.VERIFIED).length || 0;
@@ -55,9 +57,11 @@ export default function FacultyDashboard() {
 
     const upcomingPrograms = programs?.filter(p => p.start_date && new Date(p.start_date) > new Date()).slice(0, 3) || [];
 
+    // BUG-FIX: `completed_at` does not exist; backend returns `submitted_at` (or `started_at` as fallback)
+    //           also use `accuracy` (percentage) for the chart, not raw `score` count
     const chartData = attempts?.map(a => ({
-        name: format(new Date(a.completed_at), 'MMM d'),
-        score: a.score
+        name: format(new Date(a.submitted_at || a.started_at), 'MMM d'),
+        score: Math.round(a.accuracy || 0)
     })).slice(-5) || [];
 
     return (

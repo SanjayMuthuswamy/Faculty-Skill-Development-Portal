@@ -30,9 +30,19 @@ export function Topbar() {
           <h1 className="text-xl lg:text-2xl font-bold text-slate-900">
             Welcome, {user?.name.split(' ')[0]}
           </h1>
-          <p className="text-xs lg:text-sm text-slate-500">
-            {user?.role === 'admin' ? 'Admin Dashboard' : 'Faculty Portal'}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-xs lg:text-sm text-slate-500">
+              {user?.role === 'admin' ? 'Admin Dashboard' : 'Faculty Portal'}
+            </p>
+            {/* Role + email badge — critical for identifying session identity */}
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${user?.role === 'admin'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-blue-100 text-blue-700'
+              }`}>
+              {user?.role}
+            </span>
+            <span className="text-[10px] text-slate-400">{user?.email}</span>
+          </div>
         </div>
         <h1 className="md:hidden text-lg font-bold text-slate-900">
           {user?.role === 'admin' ? 'Admin' : 'Portal'}

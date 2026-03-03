@@ -2,7 +2,8 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.future import select
 
 from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
@@ -14,7 +15,11 @@ class AuthService:
         self.db = db
 
     async def authenticate_user(self, login_data: LoginRequest) -> Optional[User]:
-        result = await self.db.execute(select(User).where(User.email == login_data.email))
+        result = await self.db.execute(
+            select(User)
+            .where(User.email == login_data.email)
+            .options(selectinload(User.faculty_profile))
+        )
         user = result.scalar_one_or_none()
         
         if not user:
@@ -32,6 +37,10 @@ class AuthService:
             token_type="bearer"
         )
     @staticmethod
-    async def get_user_by_id(db: Session, user_id: str) -> Optional[User]:
-        result = await db.execute(select(User).where(User.id == user_id))
+    async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
+        result = await db.execute(
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.faculty_profile))
+        )
         return result.scalar_one_or_none()
