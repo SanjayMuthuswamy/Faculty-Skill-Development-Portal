@@ -100,7 +100,7 @@ class AttemptService:
             .options(
                 selectinload(Attempt.answers).selectinload(AttemptAnswer.question),
                 selectinload(Attempt.test),
-                selectinload(Attempt.faculty),  # BUG-2 fix: eagerly load faculty to avoid MissingGreenlet
+                selectinload(Attempt.faculty),
             )
         )
         attempt = result.scalar_one_or_none()
@@ -116,14 +116,43 @@ class AttemptService:
         attempt.submitted_at = datetime.now(timezone.utc)
         
         await self.db.commit()
-        await self.db.refresh(attempt)
 
-        # 2. Trigger Performance Analysis (Enterprise AI Requirement)
-        # In a real enterprise app, this would be an event or background task.
-        # We'll implement the logic here and assume it's called in a way that doesn't block.
-        await self.run_performance_analysis(attempt)
+        # 2. Re-fetch with selectinload so Pydantic can serialize without lazy loads
+        refreshed = await self.db.execute(
+            select(Attempt)
+            .where(Attempt.id == attempt_id)
+            .options(selectinload(Attempt.answers))
+        )
+        attempt = refreshed.scalar_one()
+
+        # 3. Fire-and-forget: run performance analysis in background
+        #    Don't block the HTTP response — student gets their score immediately
+        import asyncio
+        asyncio.create_task(self._safe_performance_analysis(attempt_id))
         
         return attempt
+
+    async def _safe_performance_analysis(self, attempt_id: str):
+        """Background task: run LLM analysis without blocking the response."""
+        try:
+            # Need a fresh session since the request session may be closed
+            from app.db.session import SessionLocal
+            async with SessionLocal() as db:
+                service = AttemptService(db)
+                result = await db.execute(
+                    select(Attempt)
+                    .where(Attempt.id == attempt_id)
+                    .options(
+                        selectinload(Attempt.answers).selectinload(AttemptAnswer.question),
+                        selectinload(Attempt.test),
+                        selectinload(Attempt.faculty),
+                    )
+                )
+                attempt = result.scalar_one_or_none()
+                if attempt:
+                    await service.run_performance_analysis(attempt)
+        except Exception as e:
+            logger.error(f"Background performance analysis failed for attempt {attempt_id}: {e}", exc_info=True)
 
     async def run_performance_analysis(self, attempt: Attempt) -> Optional[PerformanceAnalysis]:
         """Runs the LLM-based skill gap analysis after deterministic scoring."""
