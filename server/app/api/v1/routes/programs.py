@@ -79,8 +79,14 @@ async def update_program(
         setattr(db_program, field, value)
     
     await db.commit()
-    await db.refresh(db_program)
-    return db_program
+    
+    # Re-fetch with enrollments eagerly loaded to prevent MissingGreenlet during serialization
+    result2 = await db.execute(
+        select(Program)
+        .where(Program.id == program_id)
+        .options(selectinload(Program.enrollments))
+    )
+    return result2.scalar_one()
 
 @router.delete("/{program_id}")
 async def delete_program(
