@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -139,7 +139,7 @@ class CRUDAttempt(CRUDBase[Attempt, AttemptCreate, AttemptUpdate]):
         attempt.total = total_questions # or total marks
         attempt.accuracy = (correct_count / total_questions) * 100 if total_questions > 0 else 0
         attempt.status = AttemptStatus.SUBMITTED
-        attempt.submitted_at = datetime.utcnow()
+        attempt.submitted_at = datetime.now(timezone.utc)
         
         db.add(attempt)
         await db.commit()

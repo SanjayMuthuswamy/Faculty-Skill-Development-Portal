@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
@@ -24,7 +24,7 @@ class Test(Base):
     time_limit_minutes: Mapped[int] = mapped_column(Integer, default=30)
     
     created_by_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     pack_links: Mapped[list["TestPack"]] = relationship("TestPack", back_populates="test")

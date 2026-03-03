@@ -1,6 +1,6 @@
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import uuid4
 
@@ -113,7 +113,7 @@ class AttemptService:
         attempt.score = score
         attempt.accuracy = (score / attempt.total * 100) if attempt.total > 0 else 0
         attempt.status = AttemptStatus.SUBMITTED
-        attempt.submitted_at = datetime.utcnow()
+        attempt.submitted_at = datetime.now(timezone.utc)
         
         await self.db.commit()
         await self.db.refresh(attempt)

@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -20,7 +20,7 @@ class Enrollment(Base):
     program_id: Mapped[str] = mapped_column(ForeignKey("programs.id"), nullable=False)
     faculty_id: Mapped[str] = mapped_column(ForeignKey("faculty_profiles.id"), nullable=False)
     status: Mapped[EnrollmentStatus] = mapped_column(String, default=EnrollmentStatus.ENROLLED)
-    enrolled_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    enrolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     program: Mapped["Program"] = relationship("Program", back_populates="enrollments")

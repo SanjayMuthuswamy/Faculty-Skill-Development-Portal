@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -16,7 +16,7 @@ class Attempt(Base):
     test_id: Mapped[str] = mapped_column(ForeignKey("tests.id"), nullable=False)
     faculty_id: Mapped[str] = mapped_column(ForeignKey("faculty_profiles.id"), nullable=False)
     
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     submitted_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     
     score: Mapped[int] = mapped_column(Integer, default=0)

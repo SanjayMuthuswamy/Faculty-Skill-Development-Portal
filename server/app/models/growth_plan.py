@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -29,7 +29,7 @@ class GrowthPlan(Base):
     status: Mapped[GrowthPlanStatus] = mapped_column(String, default=GrowthPlanStatus.ACTIVE)
     progress_percentage: Mapped[float] = mapped_column(Float, default=0.0)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     reset_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
     # Relationships

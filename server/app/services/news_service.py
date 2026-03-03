@@ -2,7 +2,7 @@
 import asyncio
 import hashlib
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -40,13 +40,13 @@ class NewsService:
             # 3. Update Cache
             if cache_entry:
                 cache_entry.json_payload = {"items": [item.model_dump() for item in normalized_items]}
-                cache_entry.fetched_at = datetime.utcnow()
+                cache_entry.fetched_at = datetime.now(timezone.utc)
                 cache_entry.ttl_seconds = settings.NEWS_CACHE_TTL_SECONDS
             else:
                 new_cache = NewsCache(
                     topic=normalized_topic,
                     json_payload={"items": [item.model_dump() for item in normalized_items]},
-                    fetched_at=datetime.utcnow(),
+                    fetched_at=datetime.now(timezone.utc),
                     ttl_seconds=settings.NEWS_CACHE_TTL_SECONDS
                 )
                 self.db.add(new_cache)
@@ -57,7 +57,7 @@ class NewsService:
                 topic=topic,
                 items=normalized_items,
                 cached=False,
-                lastFetchedAt=datetime.utcnow()
+                lastFetchedAt=datetime.now(timezone.utc)
             )
 
         except Exception as e:
@@ -75,7 +75,7 @@ class NewsService:
                 topic=topic,
                 items=[],
                 cached=False,
-                lastFetchedAt=datetime.utcnow()
+                lastFetchedAt=datetime.now(timezone.utc)
             )
 
     async def get_personalized_news(self, faculty_id: str, topics: List[str]) -> PersonalizedNewsResponse:

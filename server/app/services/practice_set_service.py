@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -145,7 +145,7 @@ class PracticeSetService:
             
         db_set.score = result_in.score
         db_set.accuracy = result_in.accuracy
-        db_set.completed_at = datetime.utcnow()
+        db_set.completed_at = datetime.now(timezone.utc)
         
         await self.db.commit()
         await self.db.refresh(db_set)

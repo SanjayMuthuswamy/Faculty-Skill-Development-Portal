@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Optional
 
@@ -35,7 +35,7 @@ class PerformanceAnalysis(Base):
     
     # Metadata
     raw_llm_output: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) # For audit/debugging
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     attempt: Mapped["Attempt"] = relationship("Attempt")

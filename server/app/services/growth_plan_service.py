@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import uuid4
 import logging
@@ -187,7 +187,7 @@ class GrowthPlanService:
             
         # Logic: Check if conditions met (mocked here as always true if requested)
         week.completed = True
-        week.completed_at = datetime.utcnow()
+        week.completed_at = datetime.now(timezone.utc)
         
         # Update plan progress
         plan = week.plan

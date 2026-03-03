@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 from sqlalchemy import String, Enum, ForeignKey, JSON, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -27,7 +27,7 @@ class QuestionDraftBatch(Base):
     prompt_version: Mapped[str] = mapped_column(String, default="1.0", nullable=False)
     
     created_by_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     questions: Mapped[list["QuestionDraft"]] = relationship("QuestionDraft", back_populates="batch", cascade="all, delete-orphan")

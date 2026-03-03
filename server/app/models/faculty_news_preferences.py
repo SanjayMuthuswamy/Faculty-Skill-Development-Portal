@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import String, ForeignKey, DateTime, JSON
@@ -13,7 +13,7 @@ class FacultyNewsPreferences(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
     faculty_id: Mapped[str] = mapped_column(ForeignKey("faculty_profiles.id"), unique=True, nullable=False)
     topics: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationship
     faculty: Mapped["FacultyProfile"] = relationship("FacultyProfile")

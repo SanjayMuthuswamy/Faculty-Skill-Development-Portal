@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 from sqlalchemy import String, Integer, ForeignKey, DateTime, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -19,7 +19,7 @@ class PracticeSet(Base):
     score: Mapped[int] = mapped_column(Integer, nullable=True)
     accuracy: Mapped[float] = mapped_column(Float, nullable=True)
     completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     faculty: Mapped["FacultyProfile"] = relationship("FacultyProfile")

@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -28,7 +28,7 @@ class Program(Base):
     status: Mapped[ProgramStatus] = mapped_column(String, default=ProgramStatus.DRAFT)
     
     created_by_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     created_by: Mapped["User"] = relationship("User")

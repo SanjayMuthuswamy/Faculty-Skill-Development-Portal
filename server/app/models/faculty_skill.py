@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -25,7 +25,7 @@ class FacultySkill(Base):
     skill_id: Mapped[str] = mapped_column(ForeignKey("skills.id"), nullable=False)
     level: Mapped[int] = mapped_column(Integer, default=1)  # 1 to 5
     status: Mapped[SkillStatus] = mapped_column(String, default=SkillStatus.UNVERIFIED)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     faculty: Mapped["FacultyProfile"] = relationship("FacultyProfile", back_populates="skills")

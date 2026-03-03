@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -26,7 +26,7 @@ class Question(Base):
     correct_option: Mapped[QuestionOption] = mapped_column(String, nullable=False)
     explanation: Mapped[str] = mapped_column(Text, nullable=True)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     pack: Mapped["QuestionPack"] = relationship("QuestionPack", back_populates="questions")

@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import String, Integer, DateTime, JSON
@@ -14,10 +14,10 @@ class NewsCache(Base):
     topic: Mapped[str] = mapped_column(String, index=True, nullable=False)
     json_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     
-    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     ttl_seconds: Mapped[int] = mapped_column(Integer, default=3600)
     
     @property
     def is_expired(self) -> bool:
-        age = (datetime.utcnow() - self.fetched_at).total_seconds()
+        age = (datetime.now(timezone.utc) - self.fetched_at).total_seconds()
         return age > self.ttl_seconds
