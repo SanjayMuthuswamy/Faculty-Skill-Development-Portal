@@ -153,9 +153,15 @@ class AttemptService:
         refreshed = await self.db.execute(
             select(Attempt)
             .where(Attempt.id == attempt_id)
-            .options(selectinload(Attempt.answers))
+            .options(
+                selectinload(Attempt.answers).selectinload(AttemptAnswer.question),
+                selectinload(Attempt.test)
+            )
         )
         attempt = refreshed.scalar_one()
+        if attempt.test:
+            attempt.test_title = attempt.test.title
+            attempt.domain = attempt.test.domain
 
         # 3. Fire-and-forget: run performance analysis in background
         #    Don't block the HTTP response — student gets their score immediately
@@ -296,15 +302,30 @@ class AttemptService:
         result = await self.db.execute(
             select(Attempt)
             .where(Attempt.faculty_id == faculty_id)
-            .options(selectinload(Attempt.answers))
+            .options(
+                selectinload(Attempt.answers),
+                selectinload(Attempt.test)
+            )
         )
-        return result.scalars().all()
+        attempts = result.scalars().all()
+        for a in attempts:
+            if a.test:
+                a.test_title = a.test.title
+                a.domain = a.test.domain
+        return attempts
 
     async def get_attempt(self, attempt_id: str) -> Optional[Attempt]:
         """Fetch a single attempt with its answers for the results page."""
         result = await self.db.execute(
             select(Attempt)
             .where(Attempt.id == attempt_id)
-            .options(selectinload(Attempt.answers))
+            .options(
+                selectinload(Attempt.answers).selectinload(AttemptAnswer.question),
+                selectinload(Attempt.test)
+            )
         )
-        return result.scalar_one_or_none()
+        attempt = result.scalar_one_or_none()
+        if attempt and attempt.test:
+            attempt.test_title = attempt.test.title
+            attempt.domain = attempt.test.domain
+        return attempt

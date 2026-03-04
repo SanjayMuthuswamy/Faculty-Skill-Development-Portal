@@ -121,7 +121,7 @@ export default function FacultyTests() {
                                     <TableCell>{format(new Date(attempt.submitted_at || attempt.started_at), 'MMM d, yyyy h:mm a')}</TableCell>
                                     <TableCell>
                                         <span className={(attempt.accuracy || 0) >= 70 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                                            {Math.round(attempt.accuracy || 0)}%
+                                            {attempt.score}/{attempt.total} ({Math.round(attempt.accuracy || 0)}%)
                                         </span>
                                     </TableCell>
                                     <TableCell>

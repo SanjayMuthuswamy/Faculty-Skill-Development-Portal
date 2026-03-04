@@ -50,6 +50,8 @@ class Attempt(AttemptBase):
     time_taken_seconds: int
     
     status: AttemptStatus
+    test_title: Optional[str] = None
+    domain: Optional[str] = None
     answers: List[AttemptAnswer] = []
 
     class Config:
