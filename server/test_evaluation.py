@@ -56,38 +56,28 @@ async def verify():
         # 3. Submit specific answers
         questions = test.questions if hasattr(test, 'questions') else questions # use the ones we fetched
         
-        # Submit 1 correct
         q1 = questions[0]
         q1_correct = q1.correct_option.value if hasattr(q1.correct_option, 'value') else q1.correct_option
-        print(f"Q1: {q1.question_text} | Correct: {q1_correct} (Type: {type(q1_correct)})")
-        ans1 = await service.submit_answer(attempt.id, q1.id, str(q1_correct))
-        print(f"Submitted Q1 Correct | ans.is_correct = {ans1.is_correct}")
         
-        # Submit 1 incorrect
         q2 = questions[1]
         q2_correct = q2.correct_option.value if hasattr(q2.correct_option, 'value') else q2.correct_option
-        # Ensure it's different
         wrong_option = 'B' if q2_correct != 'B' else 'A'
-        print(f"Q2: {q2.question_text} | Correct: {q2_correct} | Submitting Wrong: {wrong_option}")
-        ans2 = await service.submit_answer(attempt.id, q2.id, wrong_option)
-        print(f"Submitted Q2 Wrong | ans.is_correct = {ans2.is_correct}")
+
+        from app.schemas.attempt import AttemptAnswerBase
+        print(f"Bulk Submitting 1 Correct, 1 Wrong...")
+        submission = [
+            AttemptAnswerBase(question_id=q1.id, selected_option=str(q1_correct)),
+            AttemptAnswerBase(question_id=q2.id, selected_option=wrong_option)
+        ]
         
-        # 4. Finish attempt
-        print("Finishing attempt...")
-        finished = await service.finish_attempt(attempt.id)
+        finished = await service.bulk_submit(attempt.id, submission)
         
-        # Re-verify counts manually
-        print(f"DEBUG: len(finished.answers) = {len(finished.answers)}")
-        for a in finished.answers:
-            print(f"  Ans for {a.question_id}: selected={a.selected_option}, correct={a.is_correct}")
-        
-        # 5. Assert results
+        # 4. Assert results
         print("-" * 20)
         print(f"Score: {finished.score}")
         print(f"Correct Count: {finished.correct_count}")
         print(f"Incorrect Count: {finished.incorrect_count}")
         print(f"Unanswered Count: {finished.unanswered_count}")
-        print(f"Time Taken: {finished.time_taken_seconds}s")
         print(f"Accuracy: {finished.accuracy}%")
         
         expected_unanswered = test.total_questions - 2

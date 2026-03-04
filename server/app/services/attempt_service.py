@@ -68,7 +68,9 @@ class AttemptService:
             logger.error(f"submit_answer: Question {question_id} not found")
             raise ValueError(f"Question {question_id} not found")
             
-        is_correct = (question.correct_option == selected_option)
+        # Normalize option
+        input_option = selected_option.strip().upper()
+        is_correct = (question.correct_option == input_option)
         
         # Upsert answer
         ans_res = await self.db.execute(
@@ -245,6 +247,13 @@ class AttemptService:
     async def bulk_submit(self, attempt_id: str, answers_in: List[AttemptAnswerBase]) -> Attempt:
         """Submit multiple answers and finish the attempt in one go."""
         try:
+            # Fetch all existing answers for this attempt to avoid N+1 queries
+            ans_res = await self.db.execute(
+                select(AttemptAnswer).where(AttemptAnswer.attempt_id == attempt_id)
+            )
+            existing_answers = ans_res.scalars().all()
+            existing_answers_map = {a.question_id: a for a in existing_answers}
+
             # 1. Process all answers without intermediate commits
             for ans in answers_in:
                 # Check correctness
@@ -253,31 +262,29 @@ class AttemptService:
                 if not question:
                     continue # Skip invalid questions
                 
-                is_correct = (question.correct_option == ans.selected_option)
+                # Normalize option
+                input_option = ans.selected_option.strip().upper() if ans.selected_option else ""
+                is_correct = (question.correct_option == input_option)
                 
-                # Upsert answer
-                ans_res = await self.db.execute(
-                    select(AttemptAnswer).where(
-                        AttemptAnswer.attempt_id == attempt_id,
-                        AttemptAnswer.question_id == ans.question_id
-                    )
-                )
-                answer = ans_res.scalar_one_or_none()
-                
+                # Check for existing answer
+                answer = existing_answers_map.get(ans.question_id)
                 if answer:
-                    answer.selected_option = ans.selected_option
+                    answer.selected_option = input_option
                     answer.is_correct = is_correct
                 else:
                     answer = AttemptAnswer(
                         id=str(uuid4()),
                         attempt_id=attempt_id,
                         question_id=ans.question_id,
-                        selected_option=ans.selected_option,
+                        selected_option=input_option,
                         is_correct=is_correct
                     )
                     self.db.add(answer)
             
-            # 2. Finish the attempt
+            # 2. Flush to DB so the follow-up finish_attempt re-fetch sees the results
+            await self.db.flush()
+            
+            # 3. Finish the attempt
             return await self.finish_attempt(attempt_id)
             
         except Exception as e:

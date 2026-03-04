@@ -135,7 +135,7 @@ export default function TestResult() {
             <div className="space-y-4">
                 <h3 className="text-xl font-semibold">Question Review</h3>
                 {testQuestions.map((question, index) => {
-                    const selectedOptionLetter = answersRecord[question.id];
+                    const selectedOptionLetter = answersRecord[question.id]?.trim()?.toUpperCase();
                     const isCorrect = selectedOptionLetter === question.correct_option;
 
                     const options = {
