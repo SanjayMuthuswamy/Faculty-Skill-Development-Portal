@@ -61,6 +61,7 @@ class AttemptService:
             logger.error(f"start_attempt DB error: {e}", exc_info=True)
             raise
 
+    async def submit_answer(self, attempt_id: str, question_id: str, selected_option: str) -> AttemptAnswer:
         q_res = await self.db.execute(select(Question).where(Question.id == question_id))
         question = q_res.scalar_one_or_none()
         if not question:
@@ -110,12 +111,33 @@ class AttemptService:
         if not attempt:
             return None
             
+        # Ensure latest answers are loaded for scoring
+        await self.db.refresh(attempt, ["answers"])
+        
         # 1. Deterministic Scoring
-        score = sum(1 for a in attempt.answers if a.is_correct)
-        attempt.score = score
-        attempt.accuracy = (score / attempt.total * 100) if attempt.total > 0 else 0
+        # Correct answers count (equivalent to score)
+        correct_count = sum(1 for a in attempt.answers if a.is_correct)
+        
+        # Incorrect answers count (only those answered but wrong)
+        incorrect_count = sum(1 for a in attempt.answers if not a.is_correct)
+        
+        # Unanswered questions
+        unanswered_count = attempt.total - len(attempt.answers)
+        
+        # Time taken calculation
+        submitted_at = datetime.now(timezone.utc)
+        delta = submitted_at - attempt.started_at
+        time_taken_seconds = int(delta.total_seconds())
+        
+        # Persist metrics
+        attempt.score = correct_count
+        attempt.correct_count = correct_count
+        attempt.incorrect_count = incorrect_count
+        attempt.unanswered_count = max(0, unanswered_count)
+        attempt.time_taken_seconds = max(0, time_taken_seconds)
+        attempt.accuracy = (correct_count / attempt.total * 100) if attempt.total > 0 else 0
         attempt.status = AttemptStatus.SUBMITTED
-        attempt.submitted_at = datetime.now(timezone.utc)
+        attempt.submitted_at = submitted_at
         
         await self.db.commit()
 

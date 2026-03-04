@@ -38,6 +38,12 @@ async def submit_answer(
     db: AsyncSession = Depends(get_session)
 ):
     service = AttemptService(db)
+    attempt = await service.get_attempt(attempt_id)
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    if attempt.status != AttemptStatus.IN_PROGRESS:
+        raise HTTPException(status_code=400, detail=f"Cannot submit answer: Attempt is already {attempt.status}")
+        
     return await service.submit_answer(attempt_id, question_id, selected_option)
 
 @router.post("/{attempt_id}/finish", response_model=AttemptSchema)
@@ -47,9 +53,13 @@ async def finish_attempt(
     db: AsyncSession = Depends(get_session)
 ):
     service = AttemptService(db)
-    attempt = await service.finish_attempt(attempt_id)
+    attempt = await service.get_attempt(attempt_id)
     if not attempt:
         raise HTTPException(status_code=404, detail="Attempt not found")
+    if attempt.status != AttemptStatus.IN_PROGRESS:
+        raise HTTPException(status_code=400, detail=f"Cannot finish: Attempt is already {attempt.status}")
+        
+    attempt = await service.finish_attempt(attempt_id)
     return attempt
 
 @router.post("/{attempt_id}/submit", response_model=AttemptSchema)
@@ -60,9 +70,13 @@ async def bulk_submit_attempt(
     db: AsyncSession = Depends(get_session)
 ):
     service = AttemptService(db)
-    attempt = await service.bulk_submit(attempt_id, submission.answers)
+    attempt = await service.get_attempt(attempt_id)
     if not attempt:
         raise HTTPException(status_code=404, detail="Attempt not found")
+    if attempt.status != AttemptStatus.IN_PROGRESS:
+        raise HTTPException(status_code=400, detail=f"Cannot submit: Attempt is already {attempt.status}")
+        
+    attempt = await service.bulk_submit(attempt_id, submission.answers)
     return attempt
 
 @router.get("/me", response_model=List[AttemptSchema])

@@ -43,6 +43,12 @@ class Attempt(AttemptBase):
     score: int
     total: int
     accuracy: float
+    
+    correct_count: int
+    incorrect_count: int
+    unanswered_count: int
+    time_taken_seconds: int
+    
     status: AttemptStatus
     answers: List[AttemptAnswer] = []
 

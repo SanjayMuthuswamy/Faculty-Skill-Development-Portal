@@ -23,6 +23,12 @@ class Attempt(Base):
     total: Mapped[int] = mapped_column(Integer, default=0)
     accuracy: Mapped[float] = mapped_column(Float, default=0.0)
     
+    # Detailed Evaluation Fields
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    incorrect_count: Mapped[int] = mapped_column(Integer, default=0)
+    unanswered_count: Mapped[int] = mapped_column(Integer, default=0)
+    time_taken_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    
     status: Mapped[AttemptStatus] = mapped_column(String, default=AttemptStatus.IN_PROGRESS)
 
     # Relationships

@@ -21,6 +21,10 @@ export interface Attempt {
     score: number;
     total: number;            // BUG-10 fix: was total_questions, backend returns 'total'
     accuracy: number;
+    correct_count: number;
+    incorrect_count: number;
+    unanswered_count: number;
+    time_taken_seconds: number;
     started_at: string;
     submitted_at?: string;    // BUG-10 fix: was completed_at, backend returns 'submitted_at'
     status?: string;

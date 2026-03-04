@@ -6,7 +6,7 @@ import { attemptsApi } from '../../lib/api/attempts';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { CheckCircle, XCircle, ChevronLeft, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronLeft, Loader2, Clock } from 'lucide-react';
 
 export default function TestResult() {
     const { id, attemptId } = useParams<{ id: string; attemptId: string }>();
@@ -82,6 +82,54 @@ export default function TestResult() {
                         </div>
                     </div>
                 </CardHeader>
+            </Card>
+
+            {/* Performance Summary Panel */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card className="bg-blue-50/50 border-blue-100">
+                    <CardHeader className="py-4">
+                        <CardTitle className="text-sm font-medium text-blue-600">Total Questions</CardTitle>
+                    </CardHeader>
+                    <CardContent className="py-0 pb-4">
+                        <p className="text-2xl font-bold">{attempt.total}</p>
+                    </CardContent>
+                </Card>
+                <Card className="bg-green-50/50 border-green-100">
+                    <CardHeader className="py-4">
+                        <CardTitle className="text-sm font-medium text-green-600">Correct</CardTitle>
+                    </CardHeader>
+                    <CardContent className="py-0 pb-4">
+                        <p className="text-2xl font-bold">{attempt.correct_count}</p>
+                    </CardContent>
+                </Card>
+                <Card className="bg-red-50/50 border-red-100">
+                    <CardHeader className="py-4">
+                        <CardTitle className="text-sm font-medium text-red-600">Incorrect</CardTitle>
+                    </CardHeader>
+                    <CardContent className="py-0 pb-4">
+                        <p className="text-2xl font-bold">{attempt.incorrect_count}</p>
+                    </CardContent>
+                </Card>
+                <Card className="bg-gray-50/50 border-gray-200">
+                    <CardHeader className="py-4">
+                        <CardTitle className="text-sm font-medium text-gray-600">Unanswered</CardTitle>
+                    </CardHeader>
+                    <CardContent className="py-0 pb-4">
+                        <p className="text-2xl font-bold">{attempt.unanswered_count}</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <Card className="bg-white border-gray-200">
+                <CardContent className="py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-gray-500" />
+                        <span className="text-sm font-medium text-gray-700">Time Taken:</span>
+                    </div>
+                    <span className="text-lg font-bold text-gray-900">
+                        {Math.floor(attempt.time_taken_seconds / 60)}m {attempt.time_taken_seconds % 60}s
+                    </span>
+                </CardContent>
             </Card>
 
             <div className="space-y-4">
