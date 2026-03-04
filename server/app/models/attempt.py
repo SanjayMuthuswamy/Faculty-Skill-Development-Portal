@@ -17,7 +17,7 @@ class Attempt(Base):
     faculty_id: Mapped[str] = mapped_column(ForeignKey("faculty_profiles.id"), nullable=False)
     
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    submitted_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     
     score: Mapped[int] = mapped_column(Integer, default=0)
     total: Mapped[int] = mapped_column(Integer, default=0)

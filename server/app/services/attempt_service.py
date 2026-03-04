@@ -61,10 +61,12 @@ class AttemptService:
             logger.error(f"start_attempt DB error: {e}", exc_info=True)
             raise
 
-    async def submit_answer(self, attempt_id: str, question_id: str, selected_option: str) -> AttemptAnswer:
-        # Check correctness
         q_res = await self.db.execute(select(Question).where(Question.id == question_id))
         question = q_res.scalar_one_or_none()
+        if not question:
+            logger.error(f"submit_answer: Question {question_id} not found")
+            raise ValueError(f"Question {question_id} not found")
+            
         is_correct = (question.correct_option == selected_option)
         
         # Upsert answer
@@ -213,12 +215,47 @@ class AttemptService:
             return None
 
     async def bulk_submit(self, attempt_id: str, answers_in: List[AttemptAnswerBase]) -> Attempt:
-        # Submit each answer
-        for ans in answers_in:
-            await self.submit_answer(attempt_id, ans.question_id, ans.selected_option)
-        
-        # Then finish
-        return await self.finish_attempt(attempt_id)
+        """Submit multiple answers and finish the attempt in one go."""
+        try:
+            # 1. Process all answers without intermediate commits
+            for ans in answers_in:
+                # Check correctness
+                q_res = await self.db.execute(select(Question).where(Question.id == ans.question_id))
+                question = q_res.scalar_one_or_none()
+                if not question:
+                    continue # Skip invalid questions
+                
+                is_correct = (question.correct_option == ans.selected_option)
+                
+                # Upsert answer
+                ans_res = await self.db.execute(
+                    select(AttemptAnswer).where(
+                        AttemptAnswer.attempt_id == attempt_id,
+                        AttemptAnswer.question_id == ans.question_id
+                    )
+                )
+                answer = ans_res.scalar_one_or_none()
+                
+                if answer:
+                    answer.selected_option = ans.selected_option
+                    answer.is_correct = is_correct
+                else:
+                    answer = AttemptAnswer(
+                        id=str(uuid4()),
+                        attempt_id=attempt_id,
+                        question_id=ans.question_id,
+                        selected_option=ans.selected_option,
+                        is_correct=is_correct
+                    )
+                    self.db.add(answer)
+            
+            # 2. Finish the attempt
+            return await self.finish_attempt(attempt_id)
+            
+        except Exception as e:
+            logger.error(f"bulk_submit failed for attempt {attempt_id}: {e}", exc_info=True)
+            await self.db.rollback()
+            raise
 
     async def get_faculty_attempts(self, faculty_id: str) -> List[Attempt]:
         result = await self.db.execute(

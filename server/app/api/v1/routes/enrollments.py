@@ -3,6 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from typing import List
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.api.v1.deps import get_current_user, get_session
 from app.models.user import User, UserRole
@@ -43,11 +46,15 @@ async def get_my_enrollments(
     db: AsyncSession = Depends(get_session)
 ):
     if not current_user.faculty_profile:
+        logger.warning(f"User {current_user.email} (id={current_user.id}) has no faculty profile")
         raise HTTPException(status_code=400, detail="User has no faculty profile")
         
+    logger.info(f"Fetching enrollments for faculty_id={current_user.faculty_profile.id} (user={current_user.email})")
     result = await db.execute(
         select(Enrollment)
         .where(Enrollment.faculty_id == current_user.faculty_profile.id)
         .options(selectinload(Enrollment.program))
     )
-    return result.scalars().all()
+    enrollments = result.scalars().all()
+    logger.info(f"Found {len(enrollments)} enrollments for faculty_id={current_user.faculty_profile.id}")
+    return enrollments

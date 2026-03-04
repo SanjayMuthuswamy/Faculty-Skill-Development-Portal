@@ -19,3 +19,6 @@ from .faculty_news_preferences import FacultyNewsPreferences
 from .performance_analysis import PerformanceAnalysis
 from .practice_set import PracticeSet, PracticeSetQuestion
 from .question_draft import QuestionDraft, QuestionDraftBatch, DraftBatchStatus, QuestionDraftStatus
+from .roadmap import Roadmap
+from .roadmap_week import RoadmapWeek
+from .roadmap_item import RoadmapItem

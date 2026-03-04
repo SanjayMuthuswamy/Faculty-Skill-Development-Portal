@@ -65,6 +65,20 @@ class SkillSuggestionsAI(BaseModel):
     suggested_skills: List[str]
     reasoning: str
 
+class LearningRoadmapResourceAI(BaseModel):
+    title: str
+    url: str
+
+class LearningRoadmapWeekAI(BaseModel):
+    week: int
+    goals: List[str] = []
+    topics: List[str] = []
+    resources: List[LearningRoadmapResourceAI] = []
+    practice: List[str] = []
+
+class LearningRoadmapAI(BaseModel):
+    weekly_plan: List[LearningRoadmapWeekAI]
+
 # --- LLM Service ---
 
 class LLMService:
@@ -353,3 +367,58 @@ Output JSON structure ONLY:
             return None
             
         return self._validate_json(raw, SkillSuggestionsAI)
+
+    async def generate_learning_roadmap(
+        self, skill: str, weeks: int, hours_per_week: int, current_level: str = "beginner"
+    ) -> Optional[LearningRoadmapAI]:
+        """Generates a detailed, variable-length learning roadmap with resources."""
+        system_prompt = (
+            "You are an expert curriculum designer. Create a structured, week-by-week learning roadmap "
+            "for a professional who wants to master a skill. Each week must include specific goals, "
+            "topics, learning resources (with real URLs), and practice exercises. "
+            "Be realistic about what can be accomplished given the weekly hours."
+        )
+
+        prompt = f"""
+INPUT PARAMETERS:
+- Skill to learn: {skill}
+- Current proficiency level: {current_level}
+- Total weeks: {weeks}
+- Hours per week: {hours_per_week}
+
+IMPORTANT: The learner is at '{current_level}' level. Tailor content accordingly:
+- beginner: Start from scratch with fundamentals, simple exercises, basic terminology.
+- intermediate: Skip basics, focus on applied skills, patterns, and real-world projects.
+- advanced: Deep dives, architecture, optimization, cutting-edge topics, complex projects.
+
+Requirements:
+1. Generate exactly {weeks} weeks.
+2. Each week must include:
+   - goals: 2-3 specific, measurable learning goals
+   - topics: 2-4 core topics to study
+   - resources: 2-3 learning resources with title and URL (use real documentation / tutorial URLs)
+   - practice: 2-3 hands-on exercises or mini-projects
+3. Make progression logical (basics first, advanced later).
+4. Output strictly in JSON format with NO additional text.
+
+Output JSON structure ONLY:
+{{
+  "weekly_plan": [
+    {{
+      "week": 1,
+      "goals": ["Understand core concepts of {skill}", "Set up development environment"],
+      "topics": ["Introduction to {skill}", "Core terminology"],
+      "resources": [
+        {{"title": "Official Documentation", "url": "https://example.com/docs"}},
+        {{"title": "Beginner Tutorial", "url": "https://example.com/tutorial"}}
+      ],
+      "practice": ["Complete getting-started tutorial", "Build a hello-world project"]
+    }}
+  ]
+}}
+"""
+        raw = await self._call_llm(prompt, system_prompt)
+        if not raw:
+            return None
+
+        return self._validate_json(raw, LearningRoadmapAI)

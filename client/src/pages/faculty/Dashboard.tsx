@@ -55,7 +55,9 @@ export default function FacultyDashboard() {
     const verifiedSkillsCount = profile?.skills?.filter(s => s.status === SkillStatus.VERIFIED).length || 0;
     const inProgressSkillsCount = profile?.skills?.filter(s => s.status === SkillStatus.PENDING || s.status === SkillStatus.UNVERIFIED).length || 0;
 
-    const upcomingPrograms = programs?.filter(p => p.start_date && new Date(p.start_date) > new Date()).slice(0, 3) || [];
+    const upcomingPrograms = programs?.filter(p =>
+        p.status === 'UPCOMING' || p.status === 'ONGOING' || p.status === 'PUBLISHED'
+    ).slice(0, 3) || [];
 
     // BUG-FIX: `completed_at` does not exist; backend returns `submitted_at` (or `started_at` as fallback)
     //           also use `accuracy` (percentage) for the chart, not raw `score` count
@@ -147,7 +149,7 @@ export default function FacultyDashboard() {
                 </Card>
                 <Card className="col-span-3">
                     <CardHeader>
-                        <CardTitle>Upcoming Programs</CardTitle>
+                        <CardTitle>Recommended Programs</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
@@ -164,7 +166,7 @@ export default function FacultyDashboard() {
                                     </div>
                                 </div>
                             ))}
-                            {upcomingPrograms.length === 0 && <p className="text-sm text-gray-500">No upcoming programs</p>}
+                            {upcomingPrograms.length === 0 && <p className="text-sm text-gray-500">No active or upcoming programs found</p>}
                         </div>
                     </CardContent>
                 </Card>

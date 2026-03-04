@@ -6,9 +6,8 @@ import { testsApi } from '../../lib/api/tests';
 import { attemptsApi } from '../../lib/api/attempts';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/ui/Card';
-import { Loader2, ArrowRight, ArrowLeft, CheckCircle, Clock, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Loader2, ArrowRight, ArrowLeft, CheckCircle, Clock } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
-import { useExamGuard } from '../../hooks/useExamGuard';
 
 export default function TestPlayer() {
     const { id } = useParams<{ id: string }>();
@@ -56,10 +55,6 @@ export default function TestPlayer() {
             attemptsApi.submitAttempt(attemptId!, data),
         onSuccess: (data) => {
             addToast('Test submitted successfully!', 'success');
-            // Exit fullscreen before navigating
-            if (document.fullscreenElement) {
-                document.exitFullscreen().catch(() => { });
-            }
             navigate(`/faculty/tests/${id}/result/${data.id}`);
         },
         onError: (err: any) => {
@@ -70,22 +65,24 @@ export default function TestPlayer() {
 
     // Submit handler (memoized so exam guard can use it)
     const handleSubmit = useCallback(() => {
-        if (!attemptId || submitMutation.isPending) return;
+        if (!attemptId) {
+            console.error("Cannot submit: attemptId is missing");
+            addToast("Critical error: Test attempt session not found. Please refresh and try again.", "error");
+            return;
+        }
 
+        if (submitMutation.isPending) return;
+
+        console.log("Submitting test answers for attempt:", attemptId);
         const mappedAnswers = Object.entries(answers).map(([qId, option]) => ({
             question_id: qId,
             selected_option: option
         }));
 
         submitMutation.mutate({ answers: mappedAnswers });
-    }, [attemptId, answers, submitMutation]);
+    }, [attemptId, answers, submitMutation, addToast]);
 
-    // 🔒 Secure Exam Guard — fullscreen + tab-switch detection
-    const { violations, maxViolations, isFullscreen, warningMessage } = useExamGuard({
-        maxViolations: 3,
-        onAutoSubmit: handleSubmit,
-        enabled: !!attemptId, // Only activate after attempt is created
-    });
+
 
     // Countdown timer — auto-submit when time runs out
     useEffect(() => {
@@ -144,30 +141,7 @@ export default function TestPlayer() {
     };
 
     return (
-        <div className="container mx-auto max-w-3xl py-8 px-4 h-full flex flex-col select-none">
-            {/* 🔒 Exam Security Banner */}
-            <div className="mb-4 flex items-center justify-between rounded-lg bg-slate-900 text-white px-4 py-2 text-sm">
-                <div className="flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4 text-green-400" />
-                    <span>Secure Exam Mode</span>
-                    {isFullscreen && <span className="text-green-400 text-xs">● Fullscreen</span>}
-                </div>
-                <div className="flex items-center gap-3">
-                    {violations > 0 && (
-                        <span className="text-amber-400 font-medium">
-                            Violations: {violations}/{maxViolations}
-                        </span>
-                    )}
-                </div>
-            </div>
-
-            {/* ⚠️ Warning Toast */}
-            {warningMessage && (
-                <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900 animate-pulse">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-                    <span className="text-sm font-medium">{warningMessage}</span>
-                </div>
-            )}
+        <div className="container mx-auto max-w-3xl py-8 px-4 h-full flex flex-col">
 
             {/* Header */}
             <div className="mb-6 flex items-center justify-between">
