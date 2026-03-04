@@ -4,6 +4,7 @@ from typing import List
 
 from app.api.v1.deps import get_current_user, get_session
 from app.models.user import User, UserRole
+from app.models.enums import AttemptStatus
 from app.schemas.attempt import Attempt as AttemptSchema, AttemptCreate, BulkSubmitAttempt
 from app.services.attempt_service import AttemptService
 

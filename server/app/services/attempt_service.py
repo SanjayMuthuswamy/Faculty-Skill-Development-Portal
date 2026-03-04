@@ -126,7 +126,13 @@ class AttemptService:
         
         # Time taken calculation
         submitted_at = datetime.now(timezone.utc)
-        delta = submitted_at - attempt.started_at
+        
+        # Ensure started_at is aware for subtraction
+        started_at = attempt.started_at
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+            
+        delta = submitted_at - started_at
         time_taken_seconds = int(delta.total_seconds())
         
         # Persist metrics
