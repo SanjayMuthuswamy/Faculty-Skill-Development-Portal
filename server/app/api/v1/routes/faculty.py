@@ -8,6 +8,7 @@ from app.api.v1.deps import get_current_user, get_session, require_role
 from app.models.user import User, UserRole
 from app.models.faculty_profile import FacultyProfile
 from app.models.faculty_skill import FacultySkill
+from app.models.course_enrollment import CourseEnrollment
 from app.schemas.faculty import FacultyProfile as FacultySchema, FacultyProfileUpdate, FacultyCreateRequest, SkillSuggestions
 from app.schemas.skill import FacultySkill as FacultySkillSchema, FacultySkillCreate, FacultySkillUpdate
 from app.schemas.news import NewsPreferences, NewsPreferencesUpdate, PersonalizedNewsResponse
@@ -37,7 +38,9 @@ async def list_faculty_profiles(
     db: AsyncSession = Depends(get_session)
 ):
     service = FacultyService(db)
-    return await service.get_multi(skip=skip, limit=limit)
+    result = await service.get_multi(skip=skip, limit=limit)
+    logger.debug(f"Retrieved {len(result)} faculty profiles")
+    return result
 
 @router.get("/me", response_model=FacultySchema)
 async def get_my_profile(
@@ -186,7 +189,8 @@ async def get_faculty_profile(
         .where(FacultyProfile.id == faculty_id)
         .options(
             selectinload(FacultyProfile.user),
-            selectinload(FacultyProfile.skills).selectinload(FacultySkill.skill)
+            selectinload(FacultyProfile.skills).selectinload(FacultySkill.skill),
+            selectinload(FacultyProfile.course_enrollments).selectinload(CourseEnrollment.course)
         )
     )
     profile = result.scalar_one_or_none()

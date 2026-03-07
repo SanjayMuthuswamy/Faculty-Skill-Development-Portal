@@ -26,7 +26,7 @@ class GrowthWeek(Base):
     avg_score_for_week: Mapped[float] = mapped_column(Float, default=0.0)
     
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     plan: Mapped["GrowthPlan"] = relationship("GrowthPlan", back_populates="weeks")

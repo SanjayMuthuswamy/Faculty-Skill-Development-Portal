@@ -20,8 +20,12 @@ async def enroll_in_program(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session)
 ):
+    # Only faculty users should enroll - admins manage programs separately
+    if current_user.role != UserRole.FACULTY:
+        raise HTTPException(status_code=403, detail="Only faculty users can enroll in programs")
+    
     if not current_user.faculty_profile:
-        raise HTTPException(status_code=400, detail="User has no faculty profile")
+        raise HTTPException(status_code=400, detail="Faculty user has no profile")
         
     # Check if already enrolled
     result = await db.execute(
@@ -45,9 +49,13 @@ async def get_my_enrollments(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session)
 ):
+    # Only faculty users have enrollments
+    if current_user.role != UserRole.FACULTY:
+        raise HTTPException(status_code=403, detail="Only faculty users can view their enrollments")
+    
     if not current_user.faculty_profile:
-        logger.warning(f"User {current_user.email} (id={current_user.id}) has no faculty profile")
-        raise HTTPException(status_code=400, detail="User has no faculty profile")
+        logger.warning(f"Faculty user {current_user.email} (id={current_user.id}) has no profile")
+        raise HTTPException(status_code=400, detail="Faculty user has no profile")
         
     logger.info(f"Fetching enrollments for faculty_id={current_user.faculty_profile.id} (user={current_user.email})")
     result = await db.execute(

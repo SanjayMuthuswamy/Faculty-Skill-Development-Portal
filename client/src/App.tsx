@@ -14,6 +14,11 @@ import TestPlayer from './pages/faculty/TestPlayer';
 import TestResult from './pages/faculty/TestResult';
 import FacultyProfile from './pages/faculty/Profile';
 import AIGrowthPlan from './pages/faculty/AIGrowthPlan';
+import AICoachPage from './pages/faculty/AICoach';
+import CoursesPage from './pages/faculty/Courses';
+import CourseDetailPage from './pages/faculty/CourseDetail';
+import CourseAssessmentPage from './pages/faculty/CourseAssessment';
+import CourseCertificatePage from './pages/faculty/CourseCertificate';
 
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminPrograms from './pages/admin/Programs';
@@ -24,7 +29,11 @@ import AdminReports from './pages/admin/Reports';
 import FacultyPerformance from './pages/admin/FacultyPerformance';
 import AIQuestionGen from './pages/admin/AIQuestionGen';
 import DraftReview from './pages/admin/DraftReview';
+import CourseManagerPage from './pages/admin/CourseManager';
+import CourseAnalyticsPage from './pages/admin/CourseAnalytics';
 import Trends from './pages/faculty/Trends';
+import ForumPage from './pages/faculty/Forum';
+import QueryManagerPage from './pages/admin/QueryManager';
 
 
 function AppRoutes() {
@@ -56,6 +65,12 @@ function AppRoutes() {
         <Route path="profile" element={<FacultyProfile />} />
         <Route path="growth-plan" element={<AIGrowthPlan />} />
         <Route path="resources" element={<Trends />} />
+        <Route path="ai-coach" element={<AICoachPage />} />
+        <Route path="courses" element={<CoursesPage />} />
+        <Route path="courses/:id" element={<CourseDetailPage />} />
+        <Route path="courses/:id/assessment" element={<CourseAssessmentPage />} />
+        <Route path="courses/:id/certificate" element={<CourseCertificatePage />} />
+        <Route path="forum" element={<ForumPage />} />
       </Route>
 
       {/* Admin Routes */}
@@ -78,6 +93,9 @@ function AppRoutes() {
         <Route path="ai-insights" element={<AIQuestionGen />} />
         <Route path="draft-review/:id" element={<DraftReview />} />
         <Route path="resources" element={<Trends />} />
+        <Route path="courses" element={<CourseManagerPage />} />
+        <Route path="course-analytics" element={<CourseAnalyticsPage />} />
+        <Route path="queries" element={<QueryManagerPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

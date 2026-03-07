@@ -13,6 +13,7 @@ from app.models.faculty_profile import FacultyProfile
 from app.models.faculty_skill import FacultySkill, SkillStatus
 from app.models.skill import Skill
 from app.models.faculty_news_preferences import FacultyNewsPreferences
+from app.models.course_enrollment import CourseEnrollment
 from app.schemas.faculty import FacultyProfileUpdate, FacultyCreateRequest
 from app.schemas.skill import FacultySkillCreate, FacultySkillUpdate
 from app.schemas.news import NewsPreferencesUpdate
@@ -31,7 +32,8 @@ class FacultyService:
             .limit(limit)
             .options(
                 selectinload(FacultyProfile.user),
-                selectinload(FacultyProfile.skills).selectinload(FacultySkill.skill)
+                selectinload(FacultyProfile.skills).selectinload(FacultySkill.skill),
+                selectinload(FacultyProfile.course_enrollments).selectinload(CourseEnrollment.course)
             )
         )
         return result.scalars().all()

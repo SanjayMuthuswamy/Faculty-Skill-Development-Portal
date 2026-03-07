@@ -9,14 +9,14 @@ class Settings(BaseSettings):
     # App
     PROJECT_NAME: str = "Faculty Skill Development Portal"
     API_V1_STR: str = "/api/v1"
-    DEBUG: bool = True
+    DEBUG: bool = False
 
-    # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:123456789@127.0.0.1:5432/fsdp_db"
+    # Database - Override with DATABASE_URL environment variable
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/fsdp_db"
 
-    # JWT Configuration
-    JWT_ACCESS_SECRET: str
-    JWT_REFRESH_SECRET: str
+    # JWT Configuration - MUST be set in environment variables
+    JWT_ACCESS_SECRET: str = "change-this-secret-key-in-production"
+    JWT_REFRESH_SECRET: str = "change-this-refresh-secret-key-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ALGORITHM: str = "HS256"

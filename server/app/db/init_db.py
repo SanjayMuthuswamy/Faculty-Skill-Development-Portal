@@ -39,6 +39,16 @@ async def init_db() -> None:
                 is_active=True,
             )
             session.add(admin)
+            await session.flush()
+            
+            # Create faculty profile for admin so they can test faculty features
+            admin_profile = FacultyProfile(
+                id=str(uuid4()),
+                user_id=admin.id,
+                department="Administration",
+                designation="Administrator"
+            )
+            session.add(admin_profile)
             logger.info("Created admin user: admin@fsdp.com / Admin@123")
 
         # Check if faculty user exists
@@ -67,16 +77,25 @@ async def init_db() -> None:
             session.add(profile)
             logger.info("Created faculty user and profile: faculty@fsdp.com / Faculty@123")
 
-        # Add some initial skills
-        skill_result = await session.execute(select(Skill).limit(1))
-        if not skill_result.scalar_one_or_none():
-            skills = [
-                Skill(id=str(uuid4()), name="Python", domain=SkillDomain.TECHNOLOGY),
-                Skill(id=str(uuid4()), name="FastAPI", domain=SkillDomain.TECHNOLOGY),
-                Skill(id=str(uuid4()), name="Leadership", domain=SkillDomain.LEADERSHIP)
-            ]
-            session.add_all(skills)
-            logger.info("Created initial skills")
+        # Add some initial skills - check for specific skills to ensure idempotency
+        skill_names = ["Python", "FastAPI", "Leadership"]
+        existing_skills = await session.execute(
+            select(Skill).where(Skill.name.in_(skill_names))
+        )
+        existing_skill_names = {s.name for s in existing_skills.scalars()}
+        
+        if len(existing_skill_names) < len(skill_names):
+            new_skills = []
+            if "Python" not in existing_skill_names:
+                new_skills.append(Skill(id=str(uuid4()), name="Python", domain=SkillDomain.TECHNOLOGY))
+            if "FastAPI" not in existing_skill_names:
+                new_skills.append(Skill(id=str(uuid4()), name="FastAPI", domain=SkillDomain.TECHNOLOGY))
+            if "Leadership" not in existing_skill_names:
+                new_skills.append(Skill(id=str(uuid4()), name="Leadership", domain=SkillDomain.LEADERSHIP))
+            
+            if new_skills:
+                session.add_all(new_skills)
+                logger.info(f"Created initial skills: {', '.join(s.name for s in new_skills)}")
 
         await session.commit()
         logger.info("Database initialization completed")

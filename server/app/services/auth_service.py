@@ -17,7 +17,7 @@ class AuthService:
     async def authenticate_user(self, login_data: LoginRequest) -> Optional[User]:
         result = await self.db.execute(
             select(User)
-            .where(User.email == login_data.email)
+            .where(User.email == login_data.email.lower())
             .options(selectinload(User.faculty_profile))
         )
         user = result.scalar_one_or_none()

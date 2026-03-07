@@ -4,6 +4,8 @@ from typing import Optional, List
 
 from pydantic import BaseModel
 
+from app.schemas.skill import FacultySkill as FacultySkillSchema
+
 
 # Minimal user info embedded in faculty profile responses
 class UserBase(BaseModel):
@@ -36,9 +38,12 @@ class FacultyProfileInDBBase(FacultyProfileBase):
     class Config:
         from_attributes = True
 
+from app.schemas.course import CourseEnrollmentOut
+
 class FacultyProfile(FacultyProfileInDBBase):
     user: Optional[UserBase] = None
-    skills: List = []  # List[FacultySkill] — use List to avoid circular import; FastAPI handles ORM objects
+    skills: List[FacultySkillSchema] = []
+    course_enrollments: List[CourseEnrollmentOut] = []
 
 class FacultyCreateRequest(BaseModel):
     name: str

@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Faculty Skill Development Portal API",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    debug=settings.DEBUG
+    debug=settings.DEBUG,
+    redirect_slashes=False
 )
 
 # Set all CORS enabled origins

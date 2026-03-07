@@ -23,8 +23,8 @@ docker-compose up
 
 | Role   | Email              | Password    |
 |--------|-------------------|-------------|
-| Admin  | admin@fsdp.com    | Admin@123   |
-| Faculty| faculty@fsdp.com  | Faculty@123 |
+| Admin  | sanjay@fsdp.com   | 123456      |
+| Faculty| faculty@fsdp.com  | 123456      |
 
 ---
 

@@ -1,9 +1,8 @@
-import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from './ProtectedRoute'
 import LoginPage from '@/pages/LoginPage'
-import AdminDashboard from '@/pages/admin/AdminDashboard'
-import FacultyDashboard from '@/pages/faculty/FacultyDashboard'
+import AdminDashboard from '@/pages/admin/Dashboard'
+import FacultyDashboard from '@/pages/faculty/Dashboard'
 
 export const AppRouter = () => {
   return (
@@ -13,7 +12,7 @@ export const AppRouter = () => {
         <Route
           path="/admin/dashboard"
           element={
-            <ProtectedRoute requiredRole="ADMIN">
+            <ProtectedRoute allowedRoles={['admin']}>
               <AdminDashboard />
             </ProtectedRoute>
           }
@@ -21,7 +20,7 @@ export const AppRouter = () => {
         <Route
           path="/faculty/dashboard"
           element={
-            <ProtectedRoute requiredRole="FACULTY">
+            <ProtectedRoute allowedRoles={['faculty']}>
               <FacultyDashboard />
             </ProtectedRoute>
           }

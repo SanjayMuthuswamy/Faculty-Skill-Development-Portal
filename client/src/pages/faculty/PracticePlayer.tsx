@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { practiceSetsApi } from '../../lib/api/practiceSets';
-import { Button } from '../../components/ui/Button'; import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
 import { Loader2, ArrowRight, ArrowLeft, CheckCircle, Sparkles, AlertCircle } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
 import { cn } from '../../lib/utils';
@@ -18,6 +18,7 @@ export default function PracticePlayer() {
 
     const [currentIdx, setCurrentIdx] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
+    const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [isFinished, setIsFinished] = useState(false);
 
     const { data: currentSet, isLoading } = useQuery({
@@ -32,17 +33,22 @@ export default function PracticePlayer() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['ai-practice-sets'] });
             queryClient.invalidateQueries({ queryKey: ['performance'] });
-            addToast('Practice set completed!', 'success');
+            addToast('Test completed!', 'success');
             setIsFinished(true);
+        },
+        onError: (error: any) => {
+            console.error("Practice test submit error:", error);
+            const msg = error.response?.data?.detail || error.message || 'Unknown error occurred';
+            addToast(`Failed to submit: ${msg}`, 'error');
         }
     });
 
     if (isLoading || !currentSet) {
         return (
-            <div className="flex bg-gray-50 h-[400px] items-center justify-center p-8">
+            <div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center">
                 <div className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
-                    <p className="text-gray-500 font-medium tracking-tight">Loading AI Practice Set...</p>
+                    <Loader2 className="h-10 w-10 animate-spin text-indigo-600 mx-auto mb-4" />
+                    <p className="text-slate-500 font-medium">Preparing AI practice session...</p>
                 </div>
             </div>
         );
@@ -50,16 +56,21 @@ export default function PracticePlayer() {
 
     const questions = currentSet.questions;
     const currentQuestion = questions[currentIdx];
-    const options = {
-        'A': currentQuestion.option_a,
-        'B': currentQuestion.option_b,
-        'C': currentQuestion.option_c,
-        'D': currentQuestion.option_d
-    };
-    const progress = ((currentIdx + 1) / questions.length) * 100;
+    const answeredCount = Object.keys(answers).length;
+    const reviewCount = markedForReview.size;
+    const remainingCount = questions.length - answeredCount;
 
     const handleSelect = (option: string) => {
         setAnswers(prev => ({ ...prev, [currentQuestion.id]: option }));
+    };
+
+    const toggleMarkForReview = () => {
+        setMarkedForReview(prev => {
+            const next = new Set(prev);
+            if (next.has(currentQuestion.id)) next.delete(currentQuestion.id);
+            else next.add(currentQuestion.id);
+            return next;
+        });
     };
 
     const handleFinish = () => {
@@ -74,29 +85,51 @@ export default function PracticePlayer() {
 
     if (isFinished) {
         const score = Math.round((questions.filter(q => answers[q.id] === q.correct_option).length / questions.length) * 100);
+        const correctCount = questions.filter(q => answers[q.id] === q.correct_option).length;
+
         return (
-            <div className="container mx-auto max-w-2xl py-12 px-4">
-                <Card className="text-center p-8 border-t-4 border-t-green-500">
-                    <div className="mb-4 flex justify-center">
-                        <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                            <CheckCircle className="h-8 w-8" />
+            <div className="fixed inset-0 bg-slate-50 z-[9999] flex items-center justify-center p-6 overflow-y-auto">
+                <Card className="max-w-xl w-full text-center p-10 border-none shadow-2xl rounded-3xl bg-white">
+                    <div className="mb-6 flex justify-center">
+                        <div className="h-20 w-20 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                            <CheckCircle className="h-10 w-10" />
                         </div>
                     </div>
-                    <CardTitle className="text-2xl mb-2">Practice Complete!</CardTitle>
-                    <div className="text-5xl font-bold text-gray-900 my-6">
-                        {score}%
+                    <h2 className="text-3xl font-bold text-slate-900 mb-2">Practice Complete!</h2>
+                    <p className="text-slate-500 font-medium mb-8">Great job on finishing the AI-generated practice set.</p>
+
+                    <div className="bg-slate-50 rounded-2xl p-8 mb-8 border border-slate-100">
+                        <div className="text-6xl font-black text-slate-900 mb-2">
+                            {score}%
+                        </div>
+                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Your Accuracy</p>
                     </div>
-                    <p className="text-gray-500 mb-8">
-                        You got {questions.filter(q => answers[q.id] === q.correct_option).length} out of {questions.length} questions correct.
-                        {score >= 70 && currentSet.source !== 'CUSTOM' && (
-                            <span className="block mt-2 font-medium text-green-600">
-                                This counts toward your skill verification!
-                            </span>
-                        )}
-                    </p>
-                    <div className="flex gap-4 justify-center">
-                        <Button variant="outline" onClick={() => setIsFinished(false)}>Review Answers</Button>
-                        <Button onClick={() => navigate('/faculty/practice')}>Back to Dashboard</Button>
+
+                    <div className="grid grid-cols-2 gap-4 mb-10 text-left">
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Correct Answers</p>
+                            <p className="text-xl font-bold text-slate-800">{correctCount} / {questions.length}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Time Spent</p>
+                            <p className="text-xl font-bold text-slate-800">Practice Mode</p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                        <Button
+                            variant="outline"
+                            className="rounded-xl h-12 px-8 font-bold border-slate-200 text-slate-600"
+                            onClick={() => setIsFinished(false)}
+                        >
+                            Review Session
+                        </Button>
+                        <Button
+                            className="rounded-xl h-12 px-8 font-semibold bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20"
+                            onClick={() => navigate('/faculty/practice')}
+                        >
+                            Return to Sandbox
+                        </Button>
                     </div>
                 </Card>
             </div>
@@ -104,95 +137,189 @@ export default function PracticePlayer() {
     }
 
     return (
-        <div className="container mx-auto max-w-3xl py-8 px-4 h-full flex flex-col">
-            <div className="mb-6 flex items-center justify-between">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <Sparkles className="h-4 w-4 text-indigo-600" />
-                        <h1 className="text-xl font-bold tracking-tight">AI Practice Sandbox</h1>
+        <div className="fixed inset-0 bg-slate-50 z-[9999] flex flex-col font-sans overflow-hidden">
+            <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm flex-shrink-0">
+                <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
+                        <Sparkles className="h-6 w-6" />
                     </div>
-                    <p className="text-sm text-gray-500">{currentSet.domain} • {currentSet.difficulty}</p>
-                </div>
-                <div className="text-sm font-medium text-gray-500">
-                    Question {currentIdx + 1} of {questions.length}
-                </div>
-            </div>
-
-            <div className="mb-6 h-2 w-full rounded-full bg-gray-200">
-                <div
-                    className="h-2 rounded-full bg-indigo-600 transition-all duration-300"
-                    style={{ width: `${progress}%` }}
-                />
-            </div>
-
-            <Card className="flex-1 flex flex-col">
-                <CardHeader>
-                    <div className="flex justify-between items-start mb-2">
-                        <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200">
-                            {currentSet.source} MODE
-                        </Badge>
+                    <div>
+                        <h1 className="text-lg font-semibold text-slate-900 leading-tight line-clamp-1">AI Practice: {currentSet.domain}</h1>
+                        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{currentSet.difficulty} • {currentSet.source} Mode</p>
                     </div>
-                    <CardTitle className="text-lg leading-relaxed">
-                        {currentQuestion.question_text}
-                    </CardTitle>
-                </CardHeader>
+                </div>
 
-                <CardContent className="space-y-3 flex-1 overflow-y-auto">
-                    {Object.entries(options).map(([letter, text]) => (
-                        <div
-                            key={letter}
-                            onClick={() => handleSelect(letter)}
-                            className={cn(
-                                "flex items-center rounded-lg border p-4 cursor-pointer transition-all",
-                                answers[currentQuestion.id] === letter
-                                    ? "border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600"
-                                    : "border-gray-200 hover:border-indigo-300 hover:bg-gray-50"
-                            )}
-                        >
-                            <div className={cn(
-                                "flex h-6 w-6 items-center justify-center rounded-full border mr-3 text-xs font-bold",
-                                answers[currentQuestion.id] === letter
-                                    ? "border-indigo-600 bg-indigo-600 text-white"
-                                    : "border-gray-400 text-gray-500"
-                            )}>
-                                {letter}
-                            </div>
-                            <span className="text-sm font-medium">{text}</span>
-                        </div>
-                    ))}
-                </CardContent>
-
-                <CardFooter className="justify-between border-t p-6">
+                <div className="flex items-center gap-4">
+                    <div className="hidden md:flex flex-col items-end mr-4">
+                        <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Practice Mode</div>
+                        <div className="text-sm font-semibold text-indigo-600">No Time Limit</div>
+                    </div>
                     <Button
-                        variant="ghost"
-                        onClick={() => setCurrentIdx(prev => Math.max(0, prev - 1))}
-                        disabled={currentIdx === 0}
+                        variant="default"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-8 rounded-xl shadow-lg shadow-indigo-600/20 h-11"
+                        onClick={handleFinish}
+                        disabled={submitMutation.isPending}
                     >
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Previous
+                        {submitMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                        Finish Practice
                     </Button>
-
-                    {currentIdx === questions.length - 1 ? (
-                        <Button onClick={handleFinish} disabled={submitMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">
-                            {submitMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                            Finish Practice
-                        </Button>
-                    ) : (
-                        <Button onClick={() => setCurrentIdx(prev => Math.min(questions.length - 1, prev + 1))}>
-                            Next <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                    )}
-                </CardFooter>
-            </Card>
-
-            <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="text-xs text-amber-800 leading-relaxed">
-                    <p className="font-bold mb-1 underline">EXPERIMENTAL: AI PRACTICE ONLY</p>
-                    These questions are generated to help you practice and identify weak spots.
-                    While based on verified patterns, please cross-reference with official resources
-                    for critical learning points.
                 </div>
-            </div>
+            </header>
+
+            <main className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex flex-col overflow-y-auto bg-white p-8 lg:p-12 relative">
+                    <div className="max-w-3xl mx-auto w-full">
+                        <div className="flex items-center gap-3 mb-8">
+                            <span className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-50 text-indigo-600 font-semibold text-sm">
+                                {currentIdx + 1}
+                            </span>
+                            <span className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Question</span>
+                        </div>
+
+                        <div className="mb-10">
+                            <h2 className="text-2xl font-semibold text-slate-800 leading-relaxed mb-4">
+                                {currentQuestion.question_text}
+                            </h2>
+                            <div className="h-1 w-20 bg-indigo-600 rounded-full" />
+                        </div>
+
+                        <div className="space-y-4 mb-16">
+                            {[
+                                { k: 'A', t: currentQuestion.option_a },
+                                { k: 'B', t: currentQuestion.option_b },
+                                { k: 'C', t: currentQuestion.option_c },
+                                { k: 'D', t: currentQuestion.option_d }
+                            ].map((opt) => (
+                                <button
+                                    key={opt.k}
+                                    onClick={() => handleSelect(opt.k)}
+                                    className={cn(
+                                        "w-full flex items-center gap-4 p-5 rounded-2xl border-2 transition-all duration-200 text-left group",
+                                        answers[currentQuestion.id] === opt.k
+                                            ? "border-indigo-600 bg-indigo-50/50"
+                                            : "border-slate-100 hover:border-slate-200 hover:bg-slate-50"
+                                    )}
+                                >
+                                    <div className={cn(
+                                        "h-8 w-8 shrink-0 rounded-xl flex items-center justify-center font-semibold text-sm border-2 transition-colors",
+                                        answers[currentQuestion.id] === opt.k
+                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                                            : "bg-white border-slate-200 text-slate-400 group-hover:border-slate-300 group-hover:text-slate-500"
+                                    )}>
+                                        {opt.k}
+                                    </div>
+                                    <span className={cn(
+                                        "font-medium text-lg leading-tight",
+                                        answers[currentQuestion.id] === opt.k ? "text-indigo-800" : "text-slate-600"
+                                    )}>
+                                        {opt.t}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-8 pb-12">
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    variant="outline"
+                                    onClick={toggleMarkForReview}
+                                    className={cn(
+                                        "rounded-xl h-12 px-6 font-semibold transition-all",
+                                        markedForReview.has(currentQuestion.id)
+                                            ? "bg-amber-50 border-amber-300 text-amber-600 shadow-sm"
+                                            : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                                    )}
+                                >
+                                    {markedForReview.has(currentQuestion.id) ? 'Unmark Review' : 'Mark for Review'}
+                                </Button>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    variant="outline"
+                                    className="rounded-xl h-12 px-6 font-semibold border-slate-200 text-slate-600"
+                                    onClick={() => setCurrentIdx(prev => Math.max(0, prev - 1))}
+                                    disabled={currentIdx === 0}
+                                >
+                                    <ArrowLeft className="mr-2 h-4 w-4" /> Previous
+                                </Button>
+                                <Button
+                                    className="rounded-xl h-12 px-8 font-semibold bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20"
+                                    onClick={() => setCurrentIdx(prev => Math.min(questions.length - 1, prev + 1))}
+                                    disabled={currentIdx === questions.length - 1}
+                                >
+                                    Next Question <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
+                            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                            <div className="text-xs text-amber-800 leading-relaxed font-medium">
+                                <p className="font-semibold mb-1 underline uppercase">Review Mode Information</p>
+                                Practice mode is designed for learning. Take your time to analyze each question. Use <strong>Mark for Review</strong> to revisit questions you're unsure about.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <aside className="w-80 bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden flex-shrink-0">
+                    <div className="p-6 border-b border-slate-200 bg-white grid grid-cols-3 gap-2">
+                        <div className="flex flex-col items-center p-3 rounded-xl bg-indigo-50 text-indigo-700">
+                            <span className="text-xl font-semibold">{answeredCount}</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Answered</span>
+                        </div>
+                        <div className="flex flex-col items-center p-3 rounded-xl bg-amber-50 text-amber-700">
+                            <span className="text-xl font-semibold">{reviewCount}</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Review</span>
+                        </div>
+                        <div className="flex flex-col items-center p-3 rounded-xl bg-slate-100 text-slate-500">
+                            <span className="text-xl font-semibold">{remainingCount}</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Left</span>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6">
+                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">Practice Navigation</h3>
+                        <div className="grid grid-cols-5 gap-3">
+                            {questions.map((_, i) => {
+                                const qId = questions[i].id;
+                                const isMarked = markedForReview.has(qId);
+                                const isAnswered = !!answers[qId];
+                                const isActive = currentIdx === i;
+
+                                return (
+                                    <button
+                                        key={i}
+                                        onClick={() => setCurrentIdx(i)}
+                                        className={cn(
+                                            "h-10 w-10 rounded-xl flex items-center justify-center font-semibold text-sm transition-all duration-200 border-2",
+                                            isActive ? "scale-110 shadow-md ring-2 ring-indigo-600 ring-offset-2" : "hover:scale-105",
+                                            isMarked ? "bg-amber-500 border-amber-600 text-white" :
+                                                isAnswered ? "bg-emerald-500 border-emerald-600 text-white" :
+                                                    "bg-white border-slate-200 text-slate-400"
+                                        )}
+                                    >
+                                        {i + 1}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="p-6 bg-white border-t border-slate-200 space-y-3">
+                        <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
+                            <div className="h-3 w-3 rounded bg-emerald-500" /> <span>Answered</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
+                            <div className="h-3 w-3 rounded bg-amber-500" /> <span>Marked for Review</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
+                            <div className="h-3 w-3 rounded bg-white border border-slate-300" /> <span>Not Answered</span>
+                        </div>
+                    </div>
+                </aside>
+            </main>
         </div>
     );
 }

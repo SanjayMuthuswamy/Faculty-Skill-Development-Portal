@@ -92,6 +92,22 @@ async def list_my_attempts(
     return await service.get_faculty_attempts(current_user.faculty_profile.id)
 
 
+@router.get("/faculty/{faculty_id}", response_model=List[AttemptSchema])
+async def get_faculty_attempts(
+    faculty_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    """Allows admins to fetch attempts for any faculty member. Faculty can only fetch their own."""
+    # RBAC: Only admin or the faculty member themselves can access this
+    if current_user.role != UserRole.ADMIN:
+        if not current_user.faculty_profile or current_user.faculty_profile.id != faculty_id:
+             raise HTTPException(status_code=403, detail="Insufficient permissions")
+             
+    service = AttemptService(db)
+    return await service.get_faculty_attempts(faculty_id)
+
+
 @router.get("/{attempt_id}", response_model=AttemptSchema)
 async def get_attempt_by_id(
     attempt_id: str,

@@ -3,7 +3,7 @@ from app.api.v1.routes import (
     auth, users, faculty, skills, programs,
     enrollments, question_packs, tests,
     attempts, growth_plans, analytics, news, health, ai_questions,
-    practice_sets, roadmaps
+    practice_sets, roadmaps, ai_coach, courses, discussions, queries
 )
 
 api_router = APIRouter()
@@ -24,3 +24,8 @@ api_router.include_router(news.router, prefix="/news", tags=["news"])
 api_router.include_router(ai_questions.router, prefix="/ai-questions", tags=["ai-questions"])
 api_router.include_router(practice_sets.router, prefix="/practice-sets", tags=["practice-sets"])
 api_router.include_router(roadmaps.router, prefix="/roadmaps", tags=["roadmaps"])
+api_router.include_router(ai_coach.router, prefix="/ai-coach", tags=["ai-coach"])
+api_router.include_router(courses.router, prefix="/courses", tags=["courses"])
+api_router.include_router(discussions.router, prefix="/discussions", tags=["discussions"])
+api_router.include_router(queries.router, prefix="/queries", tags=["queries"])
+

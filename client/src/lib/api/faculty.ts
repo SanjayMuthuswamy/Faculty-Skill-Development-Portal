@@ -20,12 +20,30 @@ export interface FacultySkill {
     };
 }
 
+export interface CourseEnrollment {
+    id: string;
+    faculty_id: string;
+    course_id: string;
+    enrolled_at: string;
+    completed_at?: string;
+    progress: number;
+    certificate_issued: boolean;
+    course?: {
+        id: string;
+        title: string;
+        description?: string;
+        instructor_name: string;
+        thumbnail_url?: string;
+    };
+}
+
 export interface FacultyProfile {
     id: string;
     user_id: string;
     department?: string;
     designation?: string;
     experience_years?: number;
+    enrollment_count?: number;
     created_at: string;
     user?: {
         id: string;
@@ -33,6 +51,7 @@ export interface FacultyProfile {
         email: string;
     };
     skills?: FacultySkill[];
+    course_enrollments?: CourseEnrollment[];
 }
 
 export interface FacultyProfileUpdate {

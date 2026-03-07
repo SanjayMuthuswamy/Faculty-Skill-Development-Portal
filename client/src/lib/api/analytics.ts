@@ -6,6 +6,7 @@ export interface FacultyAnalytics {
     department?: string;
     verified_skills_count: number;
     attempts_count: number;
+    total_enrollments: number;
     avg_accuracy: number;
     active_plan_progress: number;
     top_gap?: string;

@@ -19,5 +19,8 @@ class NewsCache(Base):
     
     @property
     def is_expired(self) -> bool:
-        age = (datetime.now(timezone.utc) - self.fetched_at).total_seconds()
+        fetched_at = self.fetched_at
+        if fetched_at.tzinfo is None:
+            fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - fetched_at).total_seconds()
         return age > self.ttl_seconds

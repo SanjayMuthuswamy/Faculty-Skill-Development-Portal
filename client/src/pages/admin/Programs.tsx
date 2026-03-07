@@ -12,6 +12,7 @@ import { useToast } from '../../components/ui/Toast';
 import { useForm } from 'react-hook-form';
 import { Plus, Edit2, Trash2, Users } from 'lucide-react';
 import { format } from 'date-fns';
+import { cn } from '../../lib/utils';
 
 export default function AdminPrograms() {
     const { addToast } = useToast();
@@ -24,7 +25,7 @@ export default function AdminPrograms() {
         queryFn: () => programsApi.listPrograms(),
     });
 
-    const { register, handleSubmit, reset, setValue } = useForm<any>();
+    const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<any>();
 
     const createMutation = useMutation({
         mutationFn: programsApi.createProgram,
@@ -34,6 +35,15 @@ export default function AdminPrograms() {
             setIsModalOpen(false);
             reset();
         },
+        onError: (error: any) => {
+            const detail = error.response?.data?.detail;
+            const message = typeof detail === 'string'
+                ? detail
+                : (Array.isArray(detail)
+                    ? detail.map((d: any) => `${d.loc.join('.')}: ${d.msg}`).join(', ')
+                    : 'Failed to create program');
+            addToast(message, 'error');
+        }
     });
 
     const updateMutation = useMutation({
@@ -45,6 +55,15 @@ export default function AdminPrograms() {
             setEditingProgram(null);
             reset();
         },
+        onError: (error: any) => {
+            const detail = error.response?.data?.detail;
+            const message = typeof detail === 'string'
+                ? detail
+                : (Array.isArray(detail)
+                    ? detail.map((d: any) => `${d.loc.join('.')}: ${d.msg}`).join(', ')
+                    : 'Failed to update program');
+            addToast(message, 'error');
+        }
     });
 
     const deleteMutation = useMutation({
@@ -62,7 +81,7 @@ export default function AdminPrograms() {
             domain: data.domain,
             start_date: data.startDate ? new Date(data.startDate).toISOString() : undefined,
             end_date: data.endDate ? new Date(data.endDate).toISOString() : undefined,
-            seats: Number(data.seats),
+            seats: Number(data.seats) || 30,
             status: data.status || ProgramStatus.DRAFT
         };
 
@@ -139,7 +158,7 @@ export default function AdminPrograms() {
                                 <TableCell>
                                     <Badge variant={
                                         program.status === ProgramStatus.DRAFT ? 'secondary' :
-                                            program.status === ProgramStatus.ACTIVE ? 'success' : 'default'
+                                            [ProgramStatus.PUBLISHED, ProgramStatus.ONGOING].includes(program.status) ? 'success' : 'default'
                                     }>
                                         {program.status}
                                     </Badge>
@@ -162,19 +181,39 @@ export default function AdminPrograms() {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProgram ? "Edit Program" : "Create New Program"}>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <Input label="Program Title" {...register('title', { required: true })} />
+                    <Input
+                        label="Program Title"
+                        {...register('title', { required: 'Title is required' })}
+                        error={errors.title?.message as string}
+                    />
 
                     <div className="space-y-1">
                         <label className="text-sm font-medium text-gray-700">Description</label>
                         <textarea
-                            className="flex min-h-[80px] w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                            {...register('description', { required: true })}
+                            className={cn(
+                                "flex min-h-[80px] w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600",
+                                errors.description && "border-red-500 focus:ring-red-500/10"
+                            )}
+                            {...register('description', { required: 'Description is required' })}
                         />
+                        {errors.description && (
+                            <p className="text-xs text-red-500">{errors.description.message as string}</p>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <Input label="Start Date" type="date" {...register('startDate', { required: true })} />
-                        <Input label="End Date" type="date" {...register('endDate', { required: true })} />
+                        <Input
+                            label="Start Date"
+                            type="date"
+                            {...register('startDate', { required: 'Start date is required' })}
+                            error={errors.startDate?.message as string}
+                        />
+                        <Input
+                            label="End Date"
+                            type="date"
+                            {...register('endDate', { required: 'End date is required' })}
+                            error={errors.endDate?.message as string}
+                        />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -186,7 +225,12 @@ export default function AdminPrograms() {
                                 ))}
                             </select>
                         </div>
-                        <Input label="Seats" type="number" {...register('seats', { required: true })} />
+                        <Input
+                            label="Seats"
+                            type="number"
+                            {...register('seats', { required: 'Seats are required', min: { value: 1, message: 'At least 1 seat required' } })}
+                            error={errors.seats?.message as string}
+                        />
                     </div>
 
                     <div className="space-y-1">

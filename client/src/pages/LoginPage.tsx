@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,16 +15,34 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
+const DEMO_USERS = [
+  { name: 'Admin', email: 'sanjay@fsdp.com', password: '123456', role: 'ADMIN' },
+  { name: 'Faculty User', email: 'faculty@fsdp.com', password: '123456', role: 'FACULTY' },
+  { name: 'Dr. John Doe', email: 'san@gmail.com', password: '123456', role: 'FACULTY' },
+  { name: 'Dr. Sarah Miller', email: 'sarah.m@example.edu', password: '123456', role: 'FACULTY' },
+  { name: 'Prof. James Wilson', email: 'james.w@example.edu', password: '123456', role: 'FACULTY' },
+  { name: 'Dr. Elena Rodriguez', email: 'elena.r@example.edu', password: '123456', role: 'FACULTY' },
+  { name: 'Dr. Robert Chen', email: 'robert.c@example.edu', password: '123456', role: 'FACULTY' },
+  { name: 'Ms. Anita Desai', email: 'anita.d@example.edu', password: '123456', role: 'FACULTY' },
+  { name: 'Sanjay', email: 'sanjay@fsdp.edu', password: '123456', role: 'FACULTY' },
+  { name: 'Sakthi', email: 'sakthi@fsdp.edu', password: '123456', role: 'FACULTY' },
+  { name: 'Vijay', email: 'vijay@fsdp.edu', password: '123456', role: 'FACULTY' },
+  { name: 'Ramesh', email: 'ramesh@fsdp.edu', password: '123456', role: 'FACULTY' },
+  { name: 'Suresh', email: 'suresh@fsdp.edu', password: '123456', role: 'FACULTY' },
+]
+
 const LoginPage = () => {
   const navigate = useNavigate()
   const { login } = useAuth()
   const [error, setError] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -44,24 +62,16 @@ const LoginPage = () => {
     }
   }
 
-  const handleDemoLogin = async (role: 'admin' | 'faculty') => {
+  const handleDemoLogin = (role: 'admin' | 'faculty') => {
     const credentials = {
-      admin: { email: 'ms@gami.com', password: 'ms' },
-      faculty: { email: 'sanjay@mail.com', password: '123' },
+      admin: { email: 'sanjay@fsdp.com', password: '123456' },
+      faculty: { email: 'faculty@fsdp.com', password: '123456' },
     }
 
     const { email, password } = credentials[role]
+    setValue('email', email)
+    setValue('password', password)
     setError('')
-    setIsLoading(true)
-
-    try {
-      await login(email, password)
-      navigate('/')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please try again.')
-    } finally {
-      setIsLoading(false)
-    }
   }
 
   return (
@@ -148,13 +158,46 @@ const LoginPage = () => {
                 <UserIcon className="h-4 w-4 text-slate-400" />
                 <label className="text-sm font-bold text-slate-700">Email Address</label>
               </div>
-              <Input
-                type="email"
-                placeholder="faculty@example.com"
-                {...register('email')}
-                error={errors.email?.message}
-                className="rounded-2xl border-slate-200 px-5 focus:border-blue-500 h-14"
-              />
+              <div className="relative">
+                <Input
+                  type="email"
+                  placeholder="faculty@example.com"
+                  {...register('email')}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  error={errors.email?.message}
+                  className="rounded-2xl border-slate-200 px-5 focus:border-blue-500 h-14 w-full"
+                />
+
+                {showSuggestions && (
+                  <div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="p-2 space-y-1">
+                      {DEMO_USERS.map((user) => (
+                        <button
+                          key={user.email}
+                          type="button"
+                          onClick={() => {
+                            setValue('email', user.email)
+                            setValue('password', user.password)
+                            setShowSuggestions(false)
+                            setError('')
+                          }}
+                          className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors group text-left"
+                        >
+                          <div>
+                            <div className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{user.name}</div>
+                            <div className="text-xs text-slate-500 font-medium">{user.email}</div>
+                          </div>
+                          <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${user.role === 'ADMIN' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'
+                            }`}>
+                            {user.role}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">

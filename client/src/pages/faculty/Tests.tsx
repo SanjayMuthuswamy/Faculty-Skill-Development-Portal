@@ -1,19 +1,26 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { testsApi, Difficulty } from '../../lib/api/tests';
 import { attemptsApi } from '../../lib/api/attempts';
+import { practiceSetsApi } from '../../lib/api/practiceSets';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
-import { PlayCircle, Clock, Award, History, ArrowRight } from 'lucide-react';
+import { PlayCircle, Clock, Award, History, ArrowRight, Search, Filter, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
+import { Pagination } from '../../components/ui/Pagination';
+import { cn } from '../../lib/utils';
 
 export default function FacultyTests() {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
+    const activeTab = queryParams.get('tab') || 'tests';
+
     const [filterDifficulty, setFilterDifficulty] = useState<'ALL' | Difficulty>('ALL');
 
     const { data: tests, isLoading: isLoadingTests } = useQuery({
@@ -27,123 +34,282 @@ export default function FacultyTests() {
         enabled: !!user,
     });
 
+    const { data: practiceSets } = useQuery({
+        queryKey: ['practice-sets', user?.id],
+        queryFn: practiceSetsApi.listMySets,
+        enabled: !!user,
+    });
+
+    const [testsPage, setTestsPage] = useState(1);
+    const [historyPage, setHistoryPage] = useState(1);
+    const [practiceHistoryPage, setPracticeHistoryPage] = useState(1);
+    const ITEMS_PER_PAGE = 10;
+
     const filteredTests = Array.isArray(tests) ? tests.filter(test =>
         filterDifficulty === 'ALL' || test.difficulty === filterDifficulty
     ) : [];
 
     const getTestTitle = (testId?: string) => {
-        if (!Array.isArray(tests)) return 'Practice Test';
-        return tests.find(t => t.id === testId)?.title || 'Practice Test';
+        if (!Array.isArray(tests)) return 'Official Test';
+        return tests.find(t => t.id === testId)?.title || 'Official Test';
     };
+
+    const pagedTests = filteredTests.slice((testsPage - 1) * ITEMS_PER_PAGE, testsPage * ITEMS_PER_PAGE);
+
+    // Completed practice sets only
+    const completedPracticeSets = practiceSets?.filter(s => s.completed_at) || [];
 
     return (
         <div className="space-y-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Practice Tests</h1>
-                    <p className="text-gray-500">Assess your skills with our curated question bank</p>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        {activeTab === 'results' ? 'My Test Results' : 'Official Practice Tests'}
+                    </h1>
+                    <p className="text-gray-500">
+                        {activeTab === 'results'
+                            ? 'Review your performance across official tests and AI practice tests.'
+                            : 'Assess your skills with our curated official question bank'}
+                    </p>
                 </div>
-                <select
-                    className="h-10 rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 w-40"
-                    value={filterDifficulty}
-                    onChange={(e) => setFilterDifficulty(e.target.value as any)}
-                >
-                    <option value="ALL">Any Difficulty</option>
-                    <option value={Difficulty.BEGINNER}>Beginner</option>
-                    <option value={Difficulty.INTERMEDIATE}>Intermediate</option>
-                    <option value={Difficulty.ADVANCED}>Advanced</option>
-                </select>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {isLoadingTests ? (
-                    <p>Loading tests...</p>
-                ) : filteredTests?.map((test) => (
-                    <Card key={test.id} className="flex flex-col border-l-4 border-l-blue-600">
-                        <CardHeader>
-                            <div className="flex justify-between items-start">
-                                <Badge variant="outline">{test.domain}</Badge>
-                                <Badge variant={test.difficulty === Difficulty.BEGINNER ? 'success' : test.difficulty === Difficulty.INTERMEDIATE ? 'warning' : 'destructive'}>
-                                    {test.difficulty}
-                                </Badge>
-                            </div>
-                            <CardTitle className="mt-2 text-lg">{test.title}</CardTitle>
-                            <CardDescription className="line-clamp-2">{test.description}</CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex-1">
-                            <div className="flex items-center gap-4 text-sm text-gray-500">
-                                <div className="flex items-center gap-1">
-                                    <Clock className="h-4 w-4" />
-                                    <span>{test.time_limit_minutes} mins</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <Award className="h-4 w-4" />
-                                    <span>Pass: {test.pass_marks}%</span>
-                                </div>
-                            </div>
-                        </CardContent>
-                        <div className="p-6 pt-0 mt-auto">
-                            <Button className="w-full" onClick={() => navigate(`/faculty/tests/${test.id}/play`)}>
-                                <PlayCircle className="mr-2 h-4 w-4" />
-                                Start Test
-                            </Button>
+                {activeTab !== 'results' && (
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <select
+                                className="h-10 rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/20 w-44 font-medium"
+                                value={filterDifficulty}
+                                onChange={(e) => {
+                                    setFilterDifficulty(e.target.value as any);
+                                    setTestsPage(1);
+                                }}
+                            >
+                                <option value="ALL">All Levels</option>
+                                <option value={Difficulty.BEGINNER}>Beginner</option>
+                                <option value={Difficulty.INTERMEDIATE}>Intermediate</option>
+                                <option value={Difficulty.ADVANCED}>Advanced</option>
+                            </select>
                         </div>
-                    </Card>
-                ))}
+                    </div>
+                )}
             </div>
 
-            <div className="mt-12">
-                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <History className="h-5 w-5" />
-                    Recent Activity
-                </h2>
-                <Card>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Test Name</TableHead>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Score</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Action</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {attempts?.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-6 text-gray-500">
-                                        No attempts yet. Start a test to see your results here.
-                                    </TableCell>
-                                </TableRow>
-                            ) : attempts?.slice().reverse().map((attempt) => (
-                                <TableRow key={attempt.id}>
-                                    <TableCell className="font-medium">{attempt.test_title || getTestTitle(attempt.test_id)}</TableCell>
-                                    <TableCell>{format(new Date(attempt.submitted_at || attempt.started_at), 'MMM d, yyyy h:mm a')}</TableCell>
-                                    <TableCell>
-                                        <span className={(attempt.accuracy || 0) >= 70 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                                            {attempt.score}/{attempt.total} ({Math.round(attempt.accuracy || 0)}%)
-                                        </span>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={'default'}>
-                                            Completed
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => navigate(attempt.test_id ? `/faculty/tests/${attempt.test_id}/result/${attempt.id}` : '#')}
+            {activeTab !== 'results' && (
+                <div className="space-y-6">
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {isLoadingTests ? (
+                            <div className="col-span-full py-12 flex justify-center">
+                                <p className="text-slate-500 animate-pulse">Loading tests...</p>
+                            </div>
+                        ) : pagedTests?.length === 0 ? (
+                            <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-200 rounded-3xl">
+                                <Search className="h-12 w-12 text-slate-200 mx-auto mb-4" />
+                                <p className="text-slate-500 font-medium">No tests found for the selected filter.</p>
+                            </div>
+                        ) : pagedTests?.map((test) => (
+                            <Card key={test.id} className="flex flex-col border-none shadow-sm hover:shadow-md transition-all duration-300 group overflow-hidden">
+                                <div className="h-1.5 w-full bg-blue-600" />
+                                <CardHeader className="pb-4">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">{test.domain}</Badge>
+                                        <Badge
+                                            className={cn(
+                                                "capitalize",
+                                                test.difficulty === Difficulty.BEGINNER ? 'bg-green-50 text-green-700 border-green-100' :
+                                                    test.difficulty === Difficulty.INTERMEDIATE ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                                        'bg-rose-50 text-rose-700 border-rose-100'
+                                            )}
                                         >
-                                            View Result <ArrowRight className="ml-1 h-3 w-3" />
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </Card>
-            </div>
+                                            {test.difficulty.toLowerCase()}
+                                        </Badge>
+                                    </div>
+                                    <CardTitle className="text-xl leading-tight text-slate-900">{test.title}</CardTitle>
+                                    <CardDescription className="line-clamp-2 min-h-[40px] mt-1 text-slate-500">{test.description}</CardDescription>
+                                </CardHeader>
+                                <CardContent className="flex-1 pb-6">
+                                    <div className="flex items-center gap-5 text-sm text-slate-500 font-medium">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="p-1 rounded-md bg-slate-100">
+                                                <Clock className="h-3.5 w-3.5 text-slate-600" />
+                                            </div>
+                                            <span>{test.time_limit_minutes} mins</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="p-1 rounded-md bg-slate-100">
+                                                <Award className="h-3.5 w-3.5 text-slate-600" />
+                                            </div>
+                                            <span>Pass: {test.pass_marks}%</span>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                                <div className="p-6 pt-0 mt-auto">
+                                    <Button
+                                        className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20 py-6 font-bold"
+                                        onClick={() => navigate(`/faculty/tests/${test.id}/play`)}
+                                    >
+                                        <PlayCircle className="mr-2 h-5 w-5" />
+                                        Start Test
+                                    </Button>
+                                </div>
+                            </Card>
+                        ))}
+                    </div>
+
+                    {filteredTests.length > ITEMS_PER_PAGE && (
+                        <Pagination
+                            currentPage={testsPage}
+                            totalPages={Math.ceil(filteredTests.length / ITEMS_PER_PAGE)}
+                            onPageChange={setTestsPage}
+                        />
+                    )}
+                </div>
+            )}
+
+            {activeTab === 'results' && (
+                <div className={cn("mt-4 space-y-12")}>
+                    {/* Official Test Results Section */}
+                    <div className="space-y-4">
+                        <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <div className="p-1.5 rounded-lg bg-blue-50">
+                                <Award className="h-5 w-5 text-blue-600" />
+                            </div>
+                            Official Test Results
+                        </h2>
+                        <Card className="border-none shadow-sm overflow-hidden rounded-2xl bg-white">
+                            <Table>
+                                <TableHeader className="bg-slate-50">
+                                    <TableRow>
+                                        <TableHead className="font-bold text-slate-700 py-4">Test Name</TableHead>
+                                        <TableHead className="font-bold text-slate-700 py-4">Date</TableHead>
+                                        <TableHead className="font-bold text-slate-700 py-4">Score</TableHead>
+                                        <TableHead className="font-bold text-slate-700 py-4">Accuracy</TableHead>
+                                        <TableHead className="text-right font-bold text-slate-700 py-4">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {attempts?.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center py-16 text-slate-400 border-none">
+                                                <div className="flex flex-col items-center">
+                                                    <History className="h-10 w-10 opacity-20 mb-3" />
+                                                    <p className="font-medium">No official attempts yet.</p>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : attempts?.slice().reverse().slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE).map((attempt) => (
+                                        <TableRow key={attempt.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <TableCell className="font-bold text-slate-900">{attempt.test_title || getTestTitle(attempt.test_id)}</TableCell>
+                                            <TableCell className="text-slate-500 font-medium">{format(new Date(attempt.submitted_at || attempt.started_at), 'MMM d, yyyy')}</TableCell>
+                                            <TableCell>
+                                                <span className={cn(
+                                                    "font-bold",
+                                                    (attempt.accuracy || 0) >= 70 ? 'text-green-600' : 'text-rose-600'
+                                                )}>
+                                                    {attempt.score}/{attempt.total}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge className={cn(
+                                                    "font-bold uppercase tracking-widest text-[9px] h-6 px-2 shadow-sm border-none",
+                                                    (attempt.accuracy || 0) >= 70 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                                                )}>
+                                                    {Math.round(attempt.accuracy || 0)}%
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {attempt.test_id && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                                                        onClick={() => navigate(`/faculty/tests/${attempt.test_id}/result/${attempt.id}`)}
+                                                    >
+                                                        View Details
+                                                    </Button>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                        {(attempts || []).length > ITEMS_PER_PAGE && (
+                            <Pagination
+                                currentPage={historyPage}
+                                totalPages={Math.ceil((attempts || []).length / ITEMS_PER_PAGE)}
+                                onPageChange={setHistoryPage}
+                            />
+                        )}
+                    </div>
+
+                    {/* AI Practice Test Results Section */}
+                    <div className="space-y-4 pt-8 border-t border-slate-100">
+                        <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <div className="p-1.5 rounded-lg bg-indigo-50">
+                                <Sparkles className="h-5 w-5 text-indigo-600" />
+                            </div>
+                            AI Practice Test Results
+                        </h2>
+                        <Card className="border-none shadow-sm overflow-hidden rounded-2xl bg-white">
+                            <Table>
+                                <TableHeader className="bg-slate-50">
+                                    <TableRow>
+                                        <TableHead className="font-bold text-slate-700 py-4">Topic / Domain</TableHead>
+                                        <TableHead className="font-bold text-slate-700 py-4">Date</TableHead>
+                                        <TableHead className="font-bold text-slate-700 py-4">Score</TableHead>
+                                        <TableHead className="font-bold text-slate-700 py-4">Accuracy</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {completedPracticeSets?.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-16 text-slate-400 border-none">
+                                                <div className="flex flex-col items-center">
+                                                    <Sparkles className="h-10 w-10 opacity-20 mb-3" />
+                                                    <p className="font-medium">No AI practice tests completed yet.</p>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : completedPracticeSets?.slice().reverse().slice((practiceHistoryPage - 1) * ITEMS_PER_PAGE, practiceHistoryPage * ITEMS_PER_PAGE).map((practice) => (
+                                        <TableRow key={practice.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <TableCell>
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-slate-900">{practice.topic || `${practice.domain} Practice`}</span>
+                                                    <span className="text-xs text-slate-500 capitalize">{practice.difficulty}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-slate-500 font-medium">{format(new Date(practice.completed_at!), 'MMM d, yyyy')}</TableCell>
+                                            <TableCell>
+                                                <span className={cn(
+                                                    "font-bold",
+                                                    (practice.accuracy || 0) >= 70 ? 'text-green-600' : 'text-rose-600'
+                                                )}>
+                                                    {practice.score}/{practice.questions?.length || 0}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge className={cn(
+                                                    "font-bold uppercase tracking-widest text-[9px] h-6 px-2 shadow-sm border-none",
+                                                    (practice.accuracy || 0) >= 70 ? 'bg-indigo-500 text-white' : 'bg-slate-500 text-white'
+                                                )}>
+                                                    {Math.round(practice.accuracy || 0)}%
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                        {completedPracticeSets.length > ITEMS_PER_PAGE && (
+                            <Pagination
+                                currentPage={practiceHistoryPage}
+                                totalPages={Math.ceil(completedPracticeSets.length / ITEMS_PER_PAGE)}
+                                onPageChange={setPracticeHistoryPage}
+                            />
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

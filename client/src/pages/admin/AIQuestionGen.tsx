@@ -8,13 +8,14 @@ import { useToast } from '../../components/ui/Toast';
 import { Sparkles, History, ArrowRight, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { SkillDomain } from '../../lib/api/skills';
+import { Difficulty } from '../../lib/api/tests';
 
 export default function AIQuestionGen() {
     const { addToast } = useToast();
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const [domain, setDomain] = useState<SkillDomain>(SkillDomain.TECHNOLOGY);
-    const [difficulty, setDifficulty] = useState<'EASY' | 'MEDIUM' | 'HARD'>('MEDIUM');
+    const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
     const [count, setCount] = useState(5);
     const [prompt, setPrompt] = useState('');
 
@@ -95,7 +96,7 @@ export default function AIQuestionGen() {
                                     <select
                                         className="w-full h-10 rounded-md border border-gray-300 px-3 bg-white"
                                         value={difficulty}
-                                        onChange={(e) => setDifficulty(e.target.value as any)}
+                                        onChange={(e) => setDifficulty(e.target.value as Difficulty)}
                                     >
                                         <option value="EASY">Easy</option>
                                         <option value="MEDIUM">Medium</option>

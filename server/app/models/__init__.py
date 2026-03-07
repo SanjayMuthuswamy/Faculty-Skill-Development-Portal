@@ -22,3 +22,13 @@ from .question_draft import QuestionDraft, QuestionDraftBatch, DraftBatchStatus,
 from .roadmap import Roadmap
 from .roadmap_week import RoadmapWeek
 from .roadmap_item import RoadmapItem
+from .course import Course
+from .course_module import CourseModule
+from .module_quiz import ModuleQuiz
+from .course_enrollment import CourseEnrollment
+from .lesson_progress import LessonProgress
+from .course_assessment import CourseAssessmentQuestion
+from .course_attempt import CourseAttempt
+from .discussion import Discussion, DiscussionReply
+from .faculty_query import FacultyQuery
+

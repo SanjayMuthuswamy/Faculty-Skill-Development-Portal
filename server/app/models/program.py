@@ -18,8 +18,8 @@ class Program(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=True)
     domain: Mapped[SkillDomain] = mapped_column(String, nullable=False)
-    start_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    end_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     duration: Mapped[str] = mapped_column(String, nullable=True)
     seats: Mapped[int] = mapped_column(Integer, default=30)
     mode: Mapped[str] = mapped_column(String, default="Online") # Online, Offline, Hybrid

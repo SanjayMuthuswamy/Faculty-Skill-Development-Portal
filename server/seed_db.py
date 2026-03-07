@@ -29,7 +29,7 @@ async def seed():
 
     async with async_session() as session:
         # 1. Create Admin User
-        admin_email = "ms@email.com"
+        admin_email = "sanjay@fsdp.com"
         result = await session.execute(select(User).where(User.email == admin_email))
         admin = result.scalar_one_or_none()
         
@@ -37,7 +37,7 @@ async def seed():
             admin = User(
                 id=str(uuid4()),
                 email=admin_email,
-                name="System Administrator",
+                name="Sanjay",
                 password_hash=get_password_hash("123456"),
                 role=UserRole.ADMIN,
                 is_active=True
@@ -46,7 +46,7 @@ async def seed():
             print(f"Created admin user: {admin_email}")
 
         # 2. Create Faculty User
-        faculty_email = "san@gmail.com"
+        faculty_email = "faculty@fsdp.com"
         result = await session.execute(select(User).where(User.email == faculty_email))
         faculty_user = result.scalar_one_or_none()
         
@@ -54,8 +54,8 @@ async def seed():
             faculty_user = User(
                 id=str(uuid4()),
                 email=faculty_email,
-                name="Dr. Sanjay",
-                password_hash=get_password_hash("1234567"),
+                name="Faculty User",
+                password_hash=get_password_hash("123456"),
                 role=UserRole.FACULTY,
                 is_active=True
             )

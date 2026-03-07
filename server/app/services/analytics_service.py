@@ -10,6 +10,7 @@ from app.models.faculty_profile import FacultyProfile
 from app.models.attempt import Attempt
 from app.models.faculty_skill import FacultySkill
 from app.models.growth_plan import GrowthPlan
+from app.models.course_enrollment import CourseEnrollment
 from app.models.performance_analysis import PerformanceAnalysis
 from app.schemas.analytics import FacultyAnalytics, DepartmentSummary
 
@@ -24,7 +25,7 @@ class AnalyticsService:
                 selectinload(FacultyProfile.attempts),
                 selectinload(FacultyProfile.growth_plans),
                 selectinload(FacultyProfile.skills),
-                selectinload(FacultyProfile.enrollments)
+                selectinload(FacultyProfile.course_enrollments)
             )
         )
         profiles = result.scalars().all()
@@ -45,10 +46,10 @@ class AnalyticsService:
             s = dept_stats[dept]
             s["faculty_count"] += 1
             s["total_attempts"] += len(p.attempts)
-            s["total_enrollments"] += len(p.enrollments)
+            s["total_enrollments"] += len(p.course_enrollments)
             
             if p.attempts:
-                avg_acc = sum(a.score or 0.0 for a in p.attempts) / len(p.attempts)
+                avg_acc = sum(a.accuracy or 0.0 for a in p.attempts) / len(p.attempts)
                 s["total_accuracy"] += avg_acc
             
             if any(gp.status == "ACTIVE" for gp in p.growth_plans):
@@ -77,7 +78,8 @@ class AnalyticsService:
                 selectinload(FacultyProfile.user),
                 selectinload(FacultyProfile.attempts),
                 selectinload(FacultyProfile.growth_plans),
-                selectinload(FacultyProfile.skills)
+                selectinload(FacultyProfile.skills),
+                selectinload(FacultyProfile.course_enrollments)
             )
         )
         p = result.scalar_one_or_none()
@@ -108,6 +110,7 @@ class AnalyticsService:
             department=p.department,
             verified_skills_count=verified_count,
             attempts_count=len(p.attempts),
+            total_enrollments=len(p.course_enrollments),
             avg_accuracy=avg_acc,
             active_plan_progress=progress,
             top_gap=latest_analysis.weaknesses if latest_analysis else None,

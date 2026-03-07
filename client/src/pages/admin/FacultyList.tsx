@@ -7,6 +7,7 @@ import { useToast } from '../../components/ui/Toast';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
 import {
     Users,
     TrendingUp,
@@ -15,7 +16,8 @@ import {
     Search,
     BrainCircuit,
     Activity,
-    Filter
+    Filter,
+    BookOpen
 } from 'lucide-react';
 
 export function FacultyList() {
@@ -188,12 +190,13 @@ export function FacultyList() {
                     <Table>
                         <TableHeader className="bg-gray-50/50">
                             <TableRow>
-                                <TableHead className="pl-6 py-4 font-bold text-gray-600">Faculty Details</TableHead>
-                                <TableHead className="py-4 font-bold text-gray-600">Active Plan</TableHead>
-                                <TableHead className="py-4 font-bold text-gray-600">Accuracy</TableHead>
-                                <TableHead className="py-4 font-bold text-gray-600">Attempts</TableHead>
-                                <TableHead className="py-4 font-bold text-gray-600">Gap/Weakness</TableHead>
-                                <TableHead className="text-right pr-6 py-4 font-bold text-gray-600">Action</TableHead>
+                                <TableHead className="pl-6 py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Faculty Details</TableHead>
+                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Enrollments</TableHead>
+                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Active Plan</TableHead>
+                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Accuracy</TableHead>
+                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Attempts</TableHead>
+                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">AI Insights</TableHead>
+                                <TableHead className="text-right pr-6 py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Action</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -202,7 +205,7 @@ export function FacultyList() {
                             ))}
                             {filteredFaculty?.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-32 text-center text-gray-500">
+                                    <TableCell colSpan={8} className="h-32 text-center text-gray-500 font-bold italic">
                                         No faculty members found matching your criteria.
                                     </TableCell>
                                 </TableRow>
@@ -322,61 +325,77 @@ function FacultyRow({ faculty, onView }: { faculty: any, onView: () => void }) {
     });
 
     return (
-        <TableRow className="group hover:bg-blue-50/30 transition-colors border-b border-gray-100 last:border-0">
-            <TableCell className="pl-6 py-4">
-                <div className="flex flex-col">
-                    <span className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{faculty.user?.name || 'Unknown'}</span>
-                    <span className="text-xs text-gray-500">{faculty.department} • {faculty.designation}</span>
+        <TableRow className="group hover:bg-slate-50/80 transition-all border-b border-gray-100 last:border-0">
+            <TableCell className="pl-6 py-5">
+                <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                        {faculty.user?.name?.charAt(0) || 'F'}
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors leading-none mb-1">{faculty.user?.name || 'Unknown'}</span>
+                        <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400 uppercase tracking-tight">
+                            <span>{faculty.department}</span>
+                            <span className="w-1 h-1 rounded-full bg-slate-300" />
+                            <span>{faculty.designation}</span>
+                        </div>
+                    </div>
                 </div>
             </TableCell>
-            <TableCell className="py-4">
+            <TableCell className="py-5 text-center">
+                <div className="inline-flex flex-col items-center">
+                    <span className="text-sm font-bold text-slate-700">{faculty.course_enrollments?.length || 0}</span>
+                    <Badge className="bg-emerald-50 text-emerald-600 border-none text-[8px] font-semibold uppercase tracking-tighter h-4 gap-1">
+                        <BookOpen className="h-2 w-2" /> Courses
+                    </Badge>
+                </div>
+            </TableCell>
+            <TableCell className="py-5">
                 {summary ? (
-                    <div className="flex flex-col gap-1.5 min-w-[160px]">
-                        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
-                            <span className="text-gray-400">Active Plan</span>
-                            <span className="text-blue-600 font-black">{Math.round(summary.active_plan_progress)}%</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                    <div className="flex flex-col gap-1.5 min-w-[140px] px-2 text-center">
+                        <span className="text-blue-600 font-black text-[10px]">{Math.round(summary.active_plan_progress)}%</span>
+                        <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden shadow-inner">
                             <div
-                                className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-700 ease-out shadow-[0_0_8px_rgba(37,99,235,0.4)]"
+                                className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000 ease-out"
                                 style={{ width: `${summary.active_plan_progress}%` }}
                             />
                         </div>
                     </div>
                 ) : (
-                    <span className="text-xs text-gray-400 italic">No active plan</span>
+                    <div className="text-center">
+                        <span className="text-[10px] text-gray-300 font-bold uppercase italic tracking-widest">Not Started</span>
+                    </div>
                 )}
             </TableCell>
-            <TableCell className="py-4">
-                <div className="flex flex-col">
-                    <span className={`text-sm font-bold ${summary && summary.avg_accuracy >= 80 ? 'text-emerald-600' : summary && summary.avg_accuracy >= 60 ? 'text-blue-600' : 'text-amber-600'}`}>
+            <TableCell className="py-5 text-center">
+                <div className="flex flex-col items-center">
+                    <span className={`text-sm font-bold ${summary && summary.avg_accuracy >= 80 ? 'text-emerald-500' : summary && summary.avg_accuracy >= 60 ? 'text-blue-500' : 'text-amber-500'}`}>
                         {Math.round(summary?.avg_accuracy || 0)}%
                     </span>
-                    <span className="text-[10px] text-gray-400 uppercase font-black">Practice Score</span>
+                    <Badge className="bg-slate-50 text-slate-400 border-none text-[8px] font-semibold uppercase tracking-tighter h-4">Avg Score</Badge>
                 </div>
             </TableCell>
-            <TableCell className="py-4">
-                <div className="flex flex-col">
-                    <span className="text-sm font-bold text-gray-700">{summary?.attempts_count || 0}</span>
-                    <span className="text-[10px] text-gray-400 uppercase font-black">Evaluations</span>
+            <TableCell className="py-5 text-center">
+                <div className="inline-flex flex-col items-center">
+                    <span className="text-sm font-bold text-slate-700">{summary?.attempts_count || 0}</span>
+                    <Badge className="bg-blue-50 text-blue-500 border-none text-[8px] font-semibold uppercase tracking-tighter h-4">Tests</Badge>
                 </div>
             </TableCell>
-            <TableCell className="py-4">
-                <div className="flex flex-col gap-0.5">
-                    <span className={`text-[11px] font-black leading-tight truncate max-w-[140px] px-2 py-0.5 rounded-md w-fit ${summary?.top_gap ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-gray-50 text-gray-400 italic'}`}>
-                        {summary?.top_gap || 'Analysis pending...'}
-                    </span>
-                    <span className="text-[9px] text-gray-400 uppercase font-black tracking-widest pl-0.5">AI Insights</span>
+            <TableCell className="py-5">
+                <div className="flex flex-col gap-1">
+                    <div className={`text-[10px] font-semibold leading-tight truncate max-w-[140px] px-2 py-1 rounded-lg w-fit ${summary?.top_gap ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-400 italic'}`}>
+                        {summary?.top_gap || 'Analyzing...'}
+                    </div>
+                    <span className="text-[8px] text-slate-400 uppercase font-medium tracking-widest pl-1">AI Recommendation</span>
                 </div>
             </TableCell>
-            <TableCell className="text-right pr-6 py-4">
+            <TableCell className="text-right pr-6 py-5">
                 <Button
                     variant="ghost"
                     size="sm"
                     onClick={onView}
-                    className="h-8 rounded-lg font-bold text-xs gap-2 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm active:scale-95"
+                    className="h-9 w-9 rounded-xl font-bold flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-90 group/btn"
                 >
-                    Analyze <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className="h-4 w-4 group-hover/btn:scale-110 transition-transform" />
                 </Button>
             </TableCell>
         </TableRow>

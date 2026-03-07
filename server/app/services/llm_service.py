@@ -65,6 +65,10 @@ class SkillSuggestionsAI(BaseModel):
     suggested_skills: List[str]
     reasoning: str
 
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
 class LearningRoadmapResourceAI(BaseModel):
     title: str
     url: str
@@ -422,3 +426,149 @@ Output JSON structure ONLY:
             return None
 
         return self._validate_json(raw, LearningRoadmapAI)
+
+    async def chat_with_coach(
+        self,
+        user_message: str,
+        conversation_history: List[Dict[str, str]],
+        performance_context: Dict[str, Any]
+    ) -> Optional[str]:
+        """Interactive AI coach chat using performance data as context."""
+        if not self.api_key:
+            logger.error("OpenRouter API key not configured")
+            return None
+
+        # Build a rich system prompt from the faculty's performance data
+        total_tests = performance_context.get("total_tests", 0)
+        avg_accuracy = performance_context.get("avg_accuracy", 0)
+        weak_topics = performance_context.get("weak_topics", [])
+        strong_topics = performance_context.get("strong_topics", [])
+        recent_tests = performance_context.get("recent_tests", [])
+        no_data = total_tests == 0
+
+        if no_data:
+            context_block = "The faculty member has not completed any tests yet. Encourage them to take a test to get personalized insights."
+        else:
+            weak_str = ", ".join([f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in weak_topics]) if weak_topics else "None identified"
+            strong_str = ", ".join([f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in strong_topics]) if strong_topics else "None identified"
+            recent_str = "; ".join([f"{t['title']} scored {t['accuracy']:.0f}%" for t in recent_tests[:3]]) if recent_tests else "No recent tests"
+
+            context_block = f"""
+Faculty Performance Summary:
+- Total tests completed: {total_tests}
+- Overall average accuracy: {avg_accuracy:.1f}%
+- Weak topics (accuracy < 70%): {weak_str}
+- Strong topics (accuracy >= 70%): {strong_str}
+- Recent activity: {recent_str}
+"""
+
+        system_prompt = f"""You are an AI learning coach for the Faculty Skill Development Portal. \
+You help faculty members understand their performance, identify weak areas, and improve their skills through personalized guidance.
+
+{context_block}
+
+Guidelines:
+- Be concise, encouraging, and specific. Use bullet points for lists.
+- Always ground your answers in the performance data above.
+- If asked about weak topics, reference the specific topics and their accuracy scores.
+- If asked for study recommendations, suggest practical next steps.
+- If no data is available, encourage the faculty member to take a test first.
+- Keep responses under 250 words unless asked for a detailed plan."""
+
+        # Build message list: system + history + current user message
+        messages = [{"role": "system", "content": system_prompt}]
+        for msg in conversation_history:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": user_message})
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.5,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/SanjayMuthuswamy/Faculty-Skill-Development-Portal",
+            "X-Title": "Faculty Skill Development Portal"
+        }
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            for attempt in range(self.max_retries + 1):
+                try:
+                    response = await client.post(self.base_url, json=payload, headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
+                    if "choices" in data and data["choices"]:
+                        return data["choices"][0]["message"]["content"]
+                    return None
+                except Exception as e:
+                    logger.warning(f"Chat coach attempt {attempt + 1} failed: {e}")
+                    if attempt == self.max_retries:
+                        return None
+        return None
+
+    async def generate_course_feedback(
+        self,
+        wrong_questions: list,
+        course_title: str
+    ) -> dict | None:
+        """Generate AI feedback identifying weak areas after a course assessment."""
+        if not self.api_key:
+            return None
+        if not wrong_questions:
+            return {"weak_areas": [], "suggestions": ["Excellent work! You answered all questions correctly."]}
+
+        prompt = f"""
+A faculty member just completed the final assessment for the course: "{course_title}".
+
+They answered the following questions INCORRECTLY:
+{chr(10).join(f"- {q}" for q in wrong_questions[:10])}
+
+Based on these incorrect answers, identify:
+1. The 2-4 main weak topic areas
+2. 3-4 specific, actionable improvement suggestions
+
+Respond strictly in this JSON format:
+{{
+  "weak_areas": ["topic 1", "topic 2", "topic 3"],
+  "suggestions": [
+    "Specific suggestion 1",
+    "Specific suggestion 2",
+    "Specific suggestion 3"
+  ]
+}}
+"""
+        system = (
+            "You are an educational assessment analyst. Identify knowledge gaps from incorrect answers "
+            "and provide specific, actionable improvement recommendations. Respond only in JSON."
+        )
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,
+            "response_format": {"type": "json_object"}
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/SanjayMuthuswamy/Faculty-Skill-Development-Portal",
+            "X-Title": "Faculty Skill Development Portal"
+        }
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.post(self.base_url, json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                if "choices" in data and data["choices"]:
+                    import json as _json
+                    raw = data["choices"][0]["message"]["content"]
+                    return _json.loads(raw)
+            except Exception as e:
+                logger.warning(f"Course feedback generation failed: {e}")
+        return None
+

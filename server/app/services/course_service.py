@@ -1,0 +1,308 @@
+
+from datetime import datetime, timezone
+from typing import List, Optional, Dict, Any
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+
+from app.models.course import Course
+from app.models.course_module import CourseModule
+from app.models.course_enrollment import CourseEnrollment
+from app.models.lesson_progress import LessonProgress
+from app.models.course_attempt import CourseAttempt
+from app.models.course_assessment import CourseAssessmentQuestion
+from app.models.module_quiz import ModuleQuiz
+
+
+class CourseService:
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    # ── Courses ──────────────────────────────────────────────────────────────
+
+    async def get_courses(self, published_only: bool = True) -> List[Course]:
+        q = select(Course).options(selectinload(Course.modules))
+        if published_only:
+            q = q.where(Course.is_published == True)
+        result = await self.db.execute(q)
+        return result.scalars().all()
+
+    async def get_course(self, course_id: str) -> Optional[Course]:
+        result = await self.db.execute(
+            select(Course)
+            .where(Course.id == course_id)
+            .options(
+                selectinload(Course.modules).selectinload(CourseModule.quiz_questions),
+                selectinload(Course.assessment_questions)
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def create_course(self, data: dict, creator_id: str) -> Course:
+        course = Course(**data, created_by_id=creator_id)
+        self.db.add(course)
+        await self.db.commit()
+        await self.db.refresh(course)
+        return course
+
+    async def update_course(self, course: Course, data: dict) -> Course:
+        for k, v in data.items():
+            if v is not None:
+                setattr(course, k, v)
+        await self.db.commit()
+        await self.db.refresh(course)
+        return course
+
+    async def delete_course(self, course: Course):
+        await self.db.delete(course)
+        await self.db.commit()
+
+    # ── Modules ───────────────────────────────────────────────────────────────
+
+    async def add_module(self, course_id: str, data: dict) -> CourseModule:
+        module = CourseModule(**data, course_id=course_id)
+        self.db.add(module)
+        await self.db.commit()
+        await self.db.refresh(module)
+        return module
+
+    async def get_module(self, module_id: str) -> Optional[CourseModule]:
+        result = await self.db.execute(
+            select(CourseModule).where(CourseModule.id == module_id)
+            .options(selectinload(CourseModule.quiz_questions))
+        )
+        return result.scalar_one_or_none()
+
+    async def update_module(self, module: CourseModule, data: dict) -> CourseModule:
+        for k, v in data.items():
+            if v is not None:
+                setattr(module, k, v)
+        await self.db.commit()
+        await self.db.refresh(module)
+        return module
+
+    async def delete_module(self, module: CourseModule):
+        await self.db.delete(module)
+        await self.db.commit()
+
+    async def add_quiz_question(self, module_id: str, data: dict) -> ModuleQuiz:
+        q = ModuleQuiz(**data, module_id=module_id)
+        self.db.add(q)
+        await self.db.commit()
+        await self.db.refresh(q)
+        return q
+
+    async def delete_quiz_question(self, quiz_id: str):
+        result = await self.db.execute(select(ModuleQuiz).where(ModuleQuiz.id == quiz_id))
+        q = result.scalar_one_or_none()
+        if q:
+            await self.db.delete(q)
+            await self.db.commit()
+
+    # ── Assessment Questions ──────────────────────────────────────────────────
+
+    async def add_assessment_question(self, course_id: str, data: dict) -> CourseAssessmentQuestion:
+        q = CourseAssessmentQuestion(**data, course_id=course_id)
+        self.db.add(q)
+        await self.db.commit()
+        await self.db.refresh(q)
+        return q
+
+    async def delete_assessment_question(self, question_id: str):
+        result = await self.db.execute(
+            select(CourseAssessmentQuestion).where(CourseAssessmentQuestion.id == question_id)
+        )
+        q = result.scalar_one_or_none()
+        if q:
+            await self.db.delete(q)
+            await self.db.commit()
+
+    # ── Enrollment ────────────────────────────────────────────────────────────
+
+    async def get_enrollment(self, faculty_id: str, course_id: str) -> Optional[CourseEnrollment]:
+        result = await self.db.execute(
+            select(CourseEnrollment)
+            .where(CourseEnrollment.faculty_id == faculty_id, CourseEnrollment.course_id == course_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def enroll(self, faculty_id: str, course_id: str) -> CourseEnrollment:
+        enrollment = CourseEnrollment(faculty_id=faculty_id, course_id=course_id)
+        self.db.add(enrollment)
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+        return enrollment
+
+    async def get_my_enrollments(self, faculty_id: str) -> List[CourseEnrollment]:
+        result = await self.db.execute(
+            select(CourseEnrollment)
+            .where(CourseEnrollment.faculty_id == faculty_id)
+            .options(selectinload(CourseEnrollment.course))
+        )
+        return result.scalars().all()
+
+    # ── Progress ─────────────────────────────────────────────────────────────
+
+    async def get_lesson_progress(self, faculty_id: str, module_id: str) -> Optional[LessonProgress]:
+        result = await self.db.execute(
+            select(LessonProgress)
+            .where(LessonProgress.faculty_id == faculty_id, LessonProgress.module_id == module_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def upsert_lesson_progress(self, faculty_id: str, module_id: str, watched_seconds: int, completed: bool) -> LessonProgress:
+        progress = await self.get_lesson_progress(faculty_id, module_id)
+        if not progress:
+            progress = LessonProgress(faculty_id=faculty_id, module_id=module_id)
+            self.db.add(progress)
+        progress.watched_seconds = max(progress.watched_seconds, watched_seconds)
+        if completed and not progress.completed:
+            progress.completed = True
+            progress.completed_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(progress)
+        return progress
+
+    async def submit_quiz(self, faculty_id: str, module_id: str, answers: Dict[str, str]) -> LessonProgress:
+        """Score the mini quiz and update lesson progress."""
+        # Fetch quiz questions for this module
+        result = await self.db.execute(
+            select(ModuleQuiz).where(ModuleQuiz.module_id == module_id)
+        )
+        questions = result.scalars().all()
+
+        correct = sum(1 for q in questions if answers.get(q.id) == q.correct_answer)
+        score = (correct / len(questions) * 100) if questions else 0
+
+        progress = await self.get_lesson_progress(faculty_id, module_id)
+        if not progress:
+            progress = LessonProgress(faculty_id=faculty_id, module_id=module_id)
+            self.db.add(progress)
+        progress.quiz_score = score
+        progress.quiz_passed = score >= 60
+        await self.db.commit()
+        await self.db.refresh(progress)
+        return progress
+
+    async def get_course_progress(self, faculty_id: str, course_id: str) -> Dict[str, Any]:
+        """Return per-course progress summary."""
+        course = await self.get_course(course_id)
+        if not course:
+            return {}
+        total_modules = len(course.modules)
+        if total_modules == 0:
+            return {"total_modules": 0, "completed_modules": 0, "progress_pct": 0.0}
+
+        module_ids = [m.id for m in course.modules]
+        result = await self.db.execute(
+            select(LessonProgress)
+            .where(LessonProgress.faculty_id == faculty_id, LessonProgress.module_id.in_(module_ids))
+        )
+        progresses = result.scalars().all()
+        completed = sum(1 for p in progresses if p.completed)
+        quiz_scores = [p.quiz_score for p in progresses if p.quiz_score is not None]
+        avg_quiz = sum(quiz_scores) / len(quiz_scores) if quiz_scores else None
+
+        return {
+            "total_modules": total_modules,
+            "completed_modules": completed,
+            "progress_pct": round(completed / total_modules * 100, 1),
+            "avg_quiz_score": round(avg_quiz, 1) if avg_quiz is not None else None,
+            "all_done": completed == total_modules,
+        }
+
+    # ── Assessment ────────────────────────────────────────────────────────────
+
+    async def submit_assessment(
+        self,
+        faculty_id: str,
+        course_id: str,
+        answers: Dict[str, str],
+        time_taken_seconds: int,
+        pass_percent: float = 60.0
+    ) -> CourseAttempt:
+        import random
+        result = await self.db.execute(
+            select(CourseAssessmentQuestion).where(CourseAssessmentQuestion.course_id == course_id)
+        )
+        questions = result.scalars().all()
+
+        correct_ids = []
+        wrong_questions = []
+        for q in questions:
+            if answers.get(q.id) == q.correct_answer:
+                correct_ids.append(q.id)
+            else:
+                wrong_questions.append(q.question_text)
+
+        total = len(questions)
+        correct = len(correct_ids)
+        score = (correct / total * 100) if total else 0
+
+        attempt = CourseAttempt(
+            faculty_id=faculty_id,
+            course_id=course_id,
+            score=round(score, 2),
+            total_questions=total,
+            correct_answers=correct,
+            passed=score >= pass_percent,
+            submitted_at=datetime.now(timezone.utc),
+        )
+        self.db.add(attempt)
+        await self.db.flush()
+
+        # Mark enrollment complete if passed
+        if attempt.passed:
+            enrollment = await self.get_enrollment(faculty_id, course_id)
+            if enrollment and not enrollment.completed_at:
+                enrollment.completed_at = datetime.now(timezone.utc)
+                enrollment.certificate_issued = True
+
+        await self.db.commit()
+        await self.db.refresh(attempt)
+        return attempt, wrong_questions
+
+    async def get_latest_attempt(self, faculty_id: str, course_id: str) -> Optional[CourseAttempt]:
+        result = await self.db.execute(
+            select(CourseAttempt)
+            .where(CourseAttempt.faculty_id == faculty_id, CourseAttempt.course_id == course_id)
+            .order_by(CourseAttempt.submitted_at.desc())
+        )
+        return result.scalars().first()
+
+    async def save_ai_feedback(self, attempt_id: str, feedback: dict):
+        result = await self.db.execute(select(CourseAttempt).where(CourseAttempt.id == attempt_id))
+        attempt = result.scalar_one_or_none()
+        if attempt:
+            attempt.ai_feedback = feedback
+            await self.db.commit()
+
+    # ── Admin Analytics ───────────────────────────────────────────────────────
+
+    async def get_analytics(self) -> List[Dict[str, Any]]:
+        courses = await self.get_courses(published_only=False)
+        analytics = []
+        for course in courses:
+            enrollments_res = await self.db.execute(
+                select(CourseEnrollment).where(CourseEnrollment.course_id == course.id)
+            )
+            enrollments = enrollments_res.scalars().all()
+            total_enrolled = len(enrollments)
+            total_completed = sum(1 for e in enrollments if e.completed_at is not None)
+
+            attempts_res = await self.db.execute(
+                select(CourseAttempt).where(CourseAttempt.course_id == course.id, CourseAttempt.submitted_at != None)
+            )
+            attempts = attempts_res.scalars().all()
+            avg_score = sum(a.score for a in attempts) / len(attempts) if attempts else 0
+
+            analytics.append({
+                "course_id": course.id,
+                "course_title": course.title,
+                "total_enrolled": total_enrolled,
+                "total_completed": total_completed,
+                "completion_rate": round(total_completed / total_enrolled * 100, 1) if total_enrolled else 0,
+                "average_score": round(avg_score, 1),
+            })
+        return analytics

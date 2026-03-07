@@ -18,7 +18,7 @@ class PracticeSet(Base):
     
     score: Mapped[int] = mapped_column(Integer, nullable=True)
     accuracy: Mapped[float] = mapped_column(Float, nullable=True)
-    completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships

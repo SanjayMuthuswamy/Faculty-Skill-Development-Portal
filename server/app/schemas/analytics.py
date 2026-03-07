@@ -14,6 +14,7 @@ class FacultyAnalytics(BaseModel):
     department: Optional[str] = None
     verified_skills_count: int
     attempts_count: int
+    total_enrollments: int
     avg_accuracy: float
     active_plan_progress: float
     top_gap: Optional[str] = None

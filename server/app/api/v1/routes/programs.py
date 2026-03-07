@@ -1,8 +1,11 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 from app.api.v1.deps import get_current_user, get_session, require_role
 from app.models.user import User, UserRole
@@ -31,17 +34,26 @@ async def create_program(
     current_user: User = Depends(require_role(UserRole.ADMIN)),
     db: AsyncSession = Depends(get_session)
 ):
-    db_program = Program(**program_in.model_dump(), created_by_id=current_user.id)
-    db.add(db_program)
-    await db.commit()
-    await db.refresh(db_program)
-    # Re-fetch with relationships loaded
-    result = await db.execute(
-        select(Program)
-        .where(Program.id == db_program.id)
-        .options(selectinload(Program.enrollments))
-    )
-    return result.scalar_one()
+    try:
+        logger.debug(f"Creating program: {program_in.name}")
+        db_program = Program(**program_in.model_dump(), created_by_id=current_user.id)
+        db.add(db_program)
+        await db.commit()
+        await db.refresh(db_program)
+        # Re-fetch with relationships loaded
+        result = await db.execute(
+            select(Program)
+            .where(Program.id == db_program.id)
+            .options(selectinload(Program.enrollments))
+        )
+        return result.scalar_one()
+    except Exception as e:
+        logger.error(f"Error creating program: {str(e)}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create program: {str(e)}"
+        )
 
 @router.get("/{program_id}", response_model=ProgramSchema)
 async def get_program(
