@@ -1,4 +1,3 @@
-import React from 'react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Card } from '@/components/ui/Card'
 import { useAuth } from '@/app/providers/AuthProvider'

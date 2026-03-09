@@ -1,4 +1,4 @@
-import { User, Program, Test, QuestionPack, Enrollment, TestAttempt, FacultySkill, QuestionDraft, CareerGoal, GrowthPlan, FacultyPerformanceDetail, AIPracticeSet, PracticeQuestion } from '../types';
+import { User, Program, Test, QuestionPack, Enrollment, TestAttempt, FacultySkill, QuestionDraft, CareerGoal, GrowthPlan, FacultyPerformanceDetail, AIPracticeSet } from '../types';
 import * as SEED from './seed';
 
 const STORAGE_KEYS = {

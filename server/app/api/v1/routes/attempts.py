@@ -1,14 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional
 
 from app.api.v1.deps import get_current_user, get_session
 from app.models.user import User, UserRole
 from app.models.enums import AttemptStatus
-from app.schemas.attempt import Attempt as AttemptSchema, AttemptCreate, BulkSubmitAttempt
+from app.schemas.attempt import Attempt as AttemptSchema, AttemptCreate, BulkSubmitAttempt, AttemptAnswerBase
 from app.services.attempt_service import AttemptService
 
 router = APIRouter(tags=["attempts"])
+
+
+def _ensure_attempt_owner(attempt, current_user: User) -> None:
+    """Allow only the owning faculty profile to modify attempt state."""
+    if not current_user.faculty_profile:
+        raise HTTPException(status_code=403, detail="Only faculty users can modify attempts")
+    if attempt.faculty_id != current_user.faculty_profile.id:
+        raise HTTPException(status_code=403, detail="Cannot modify another faculty's attempt")
+
 
 @router.post("/", response_model=AttemptSchema)
 async def start_attempt(
@@ -33,8 +42,9 @@ async def start_attempt(
 @router.post("/{attempt_id}/answers")
 async def submit_answer(
     attempt_id: str,
-    question_id: str,
-    selected_option: str,
+    submission: Optional[AttemptAnswerBase] = Body(default=None),
+    question_id: Optional[str] = None,
+    selected_option: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session)
 ):
@@ -42,10 +52,20 @@ async def submit_answer(
     attempt = await service.get_attempt(attempt_id)
     if not attempt:
         raise HTTPException(status_code=404, detail="Attempt not found")
+    _ensure_attempt_owner(attempt, current_user)
     if attempt.status != AttemptStatus.IN_PROGRESS:
         raise HTTPException(status_code=400, detail=f"Cannot submit answer: Attempt is already {attempt.status}")
-        
-    return await service.submit_answer(attempt_id, question_id, selected_option)
+
+    # Prefer JSON body, with query params fallback for backward compatibility.
+    resolved_question_id = submission.question_id if submission else question_id
+    resolved_selected_option = submission.selected_option if submission else selected_option
+    if not resolved_question_id or not resolved_selected_option:
+        raise HTTPException(
+            status_code=422,
+            detail="question_id and selected_option are required in request body",
+        )
+
+    return await service.submit_answer(attempt_id, resolved_question_id, resolved_selected_option)
 
 @router.post("/{attempt_id}/finish", response_model=AttemptSchema)
 async def finish_attempt(
@@ -57,6 +77,7 @@ async def finish_attempt(
     attempt = await service.get_attempt(attempt_id)
     if not attempt:
         raise HTTPException(status_code=404, detail="Attempt not found")
+    _ensure_attempt_owner(attempt, current_user)
     if attempt.status != AttemptStatus.IN_PROGRESS:
         raise HTTPException(status_code=400, detail=f"Cannot finish: Attempt is already {attempt.status}")
         
@@ -74,6 +95,7 @@ async def bulk_submit_attempt(
     attempt = await service.get_attempt(attempt_id)
     if not attempt:
         raise HTTPException(status_code=404, detail="Attempt not found")
+    _ensure_attempt_owner(attempt, current_user)
     if attempt.status != AttemptStatus.IN_PROGRESS:
         raise HTTPException(status_code=400, detail=f"Cannot submit: Attempt is already {attempt.status}")
         
@@ -119,4 +141,6 @@ async def get_attempt_by_id(
     attempt = await service.get_attempt(attempt_id)
     if not attempt:
         raise HTTPException(status_code=404, detail="Attempt not found")
+    if current_user.role != UserRole.ADMIN:
+        _ensure_attempt_owner(attempt, current_user)
     return attempt

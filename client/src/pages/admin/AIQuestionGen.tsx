@@ -51,6 +51,15 @@ export default function AIQuestionGen() {
         });
     };
 
+    const handleCountChange = (raw: string) => {
+        const parsed = Number.parseInt(raw, 10);
+        if (Number.isNaN(parsed)) {
+            setCount(1);
+            return;
+        }
+        setCount(Math.min(10, Math.max(1, parsed)));
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -112,7 +121,7 @@ export default function AIQuestionGen() {
                                     min={1}
                                     max={10}
                                     value={count}
-                                    onChange={(e) => setCount(parseInt(e.target.value))}
+                                    onChange={(e) => handleCountChange(e.target.value)}
                                 />
                             </div>
 

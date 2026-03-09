@@ -1,11 +1,6 @@
 import http from './http'
 import { storage } from '../storage/storage'
 
-interface LoginRequest {
-  email: string
-  password: string
-}
-
 interface TokenResponse {
   access_token: string
   refresh_token: string

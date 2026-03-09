@@ -91,13 +91,14 @@ export default function AdminTestBuilder() {
     });
 
     const onSubmit = (data: any) => {
-        if (totalQuestionsSelected === 0) {
+        if (!editingTest && totalQuestionsSelected === 0) {
             addToast('Please select at least one pack or question', 'error');
             return;
         }
 
         const formattedData = {
             title: data.title,
+            description: data.description,
             domain: data.domain,
             difficulty: data.difficulty,
             time_limit_minutes: Number(data.durationMinutes),
@@ -113,19 +114,22 @@ export default function AdminTestBuilder() {
         }
     };
 
-    const handleEdit = (test: any) => {
-        setEditingTest(test);
-        setValue('title', test.title);
-        setValue('description', test.description);
-        setValue('domain', test.domain);
-        setValue('durationMinutes', test.time_limit_minutes);
-        setValue('passScore', test.pass_marks);
-        setValue('difficulty', test.difficulty);
-        // Pack and question IDs might not be directly in the test list response
-        // In a real app we might fetch the test detail first
-        setSelectedPackIds(test.pack_ids || []);
-        setSelectedQuestionIds(test.question_ids || []);
-        setIsModalOpen(true);
+    const handleEdit = async (test: Test) => {
+        try {
+            const detailedTest = await testsApi.getTest(test.id);
+            setEditingTest(detailedTest);
+            setValue('title', detailedTest.title);
+            setValue('description', detailedTest.description || '');
+            setValue('domain', detailedTest.domain);
+            setValue('durationMinutes', detailedTest.time_limit_minutes);
+            setValue('passScore', detailedTest.pass_marks);
+            setValue('difficulty', detailedTest.difficulty);
+            setSelectedPackIds(detailedTest.pack_ids || []);
+            setSelectedQuestionIds(detailedTest.question_ids || []);
+            setIsModalOpen(true);
+        } catch {
+            addToast('Unable to load full test details for editing', 'error');
+        }
     };
 
     const handleCreate = () => {
@@ -159,7 +163,7 @@ export default function AdminTestBuilder() {
             const pack = packs?.find(p => p.id === packId);
             if (pack) {
                 const otherQIds = pack.questions.filter(q => q.id !== questionId).map(q => q.id);
-                setSelectedQuestionIds(prev => [...prev, ...otherQIds]);
+                setSelectedQuestionIds(prev => Array.from(new Set([...prev, ...otherQIds])));
             }
             return;
         }
@@ -309,7 +313,7 @@ export default function AdminTestBuilder() {
                                                 return (
                                                     <div
                                                         key={q.id}
-                                                        className={`flex items - start gap - 2 p - 2 rounded - md transition - colors ${isPackSelected ? 'opacity-60 grayscale-[0.5]' : 'hover:bg-white cursor-pointer'} `}
+                                                        className={`flex items-start gap-2 p-2 rounded-md transition-colors ${isPackSelected ? 'opacity-60 grayscale-[0.5]' : 'hover:bg-white cursor-pointer'}`}
                                                         onClick={() => !isPackSelected && toggleQuestionSelection(q.id, pack.id)}
                                                     >
                                                         {(isPackSelected || isQuestionSelected) ? (

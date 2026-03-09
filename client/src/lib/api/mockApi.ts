@@ -768,13 +768,11 @@ export const api = {
             const facultyList = db.users.getAll().filter(u => u.role === 'faculty');
             const allAttempts = db.attempts.getAll() as TestAttempt[];
             const allPracticeSets = db.aiPracticeSets.getAll() as AIPracticeSet[];
-            const allSkills = db.skills.getAll() as FacultySkill[];
             const allPlans = db.growthPlans.getAll() as GrowthPlan[];
 
             return facultyList.map(faculty => {
                 const facultyAttempts = allAttempts.filter(a => a.userId === faculty.id);
                 const facultyPractice = allPracticeSets.filter(s => s.facultyId === faculty.id && s.result);
-                const facultySkills = allSkills.filter(s => s.facultyId === faculty.id);
                 const facultyPlan = allPlans.find(p => p.facultyId === faculty.id && p.status === 'ACTIVE');
 
                 const totalAttempts = facultyAttempts.length + facultyPractice.length;

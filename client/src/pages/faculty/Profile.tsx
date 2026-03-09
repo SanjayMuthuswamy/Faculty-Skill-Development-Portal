@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { facultyApi, SkillStatus } from '../../lib/api/faculty';
 import http from '../../lib/api/http';
 import { SkillDomain } from '../../lib/api/skills';
-import { coursesApi } from '../../lib/api/courses';
+import { testsApi } from '../../lib/api/tests';
+import { attemptsApi } from '../../lib/api/attempts';
 import { queriesApi } from '../../lib/api/forum';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -17,26 +19,20 @@ import { useForm } from 'react-hook-form';
 import {
     Mail,
     Briefcase,
-    Calendar,
     Plus,
     Trash2,
     Edit2,
     CheckCircle2,
-    AlertCircle,
     Sparkles,
     RefreshCw,
     Loader2,
     Award,
-    Download,
     MessageSquarePlus,
     MapPin,
     Globe,
-    ExternalLink,
-    ChevronRight,
-    TrendingUp,
     ShieldCheck
 } from 'lucide-react';
-import { FacultySkill } from '../../types';
+import { FacultySkill } from '../../lib/types';
 import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
 
@@ -94,10 +90,17 @@ function SkillSuggestions() {
 
 export default function FacultyProfile() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const { addToast } = useToast();
     const queryClient = useQueryClient();
     const [isSkillModalOpen, setIsSkillModalOpen] = useState(false);
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [editingSkill, setEditingSkill] = useState<any | null>(null);
+    const [profileForm, setProfileForm] = useState({
+        department: '',
+        designation: '',
+        experience_years: '',
+    });
 
     const { data: profile } = useQuery({
         queryKey: ['faculty-profile', 'me'],
@@ -139,6 +142,21 @@ export default function FacultyProfile() {
         },
     });
 
+    const updateProfileMutation = useMutation({
+        mutationFn: (payload: { department?: string; designation?: string; experience_years?: number }) =>
+            facultyApi.updateMe(payload),
+        onSuccess: () => {
+            addToast('Profile updated', 'success');
+            queryClient.invalidateQueries({ queryKey: ['faculty-profile', 'me'] });
+            queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+            setIsProfileModalOpen(false);
+        },
+        onError: (error: any) => {
+            const detail = error?.response?.data?.detail;
+            addToast(typeof detail === 'string' ? detail : 'Failed to update profile', 'error');
+        },
+    });
+
     const onSubmit = (data: any) => {
         if (editingSkill) {
             updateSkillMutation.mutate({ id: editingSkill.id, updates: { level: parseInt(data.level) } });
@@ -164,13 +182,48 @@ export default function FacultyProfile() {
         setIsSkillModalOpen(true);
     };
 
-    const completedQuery = useQuery({
-        queryKey: ['my-course-enrollments-profile'],
-        queryFn: coursesApi.getMyEnrollments,
+    const handleOpenProfileEdit = () => {
+        setProfileForm({
+            department: profile?.department || '',
+            designation: profile?.designation || user?.designation || '',
+            experience_years: profile?.experience_years != null ? String(profile.experience_years) : '',
+        });
+        setIsProfileModalOpen(true);
+    };
+
+    const handlePublicView = async () => {
+        const publicPath = `${window.location.origin}/faculty/profile`;
+        try {
+            await navigator.clipboard.writeText(publicPath);
+            addToast('Profile link copied to clipboard', 'success');
+        } catch {
+            addToast('Open this link to view profile: /faculty/profile', 'info');
+        }
+    };
+
+    const saveProfile = () => {
+        const payload: { department?: string; designation?: string; experience_years?: number } = {
+            department: profileForm.department.trim() || undefined,
+            designation: profileForm.designation.trim() || undefined,
+        };
+        if (profileForm.experience_years.trim() !== '') {
+            const parsed = Number(profileForm.experience_years);
+            if (Number.isFinite(parsed) && parsed >= 0) {
+                payload.experience_years = parsed;
+            }
+        }
+        updateProfileMutation.mutate(payload);
+    };
+
+    const testsQuery = useQuery({
+        queryKey: ['tests-profile'],
+        queryFn: () => testsApi.listTests(),
+        enabled: !!user,
     });
-    const allCoursesQuery = useQuery({
-        queryKey: ['all-courses-profile'],
-        queryFn: coursesApi.listCourses,
+    const attemptsQuery = useQuery({
+        queryKey: ['attempts-profile', user?.id],
+        queryFn: attemptsApi.getMyAttempts,
+        enabled: !!user,
     });
 
     const [queryForm, setQueryForm] = useState({ category: 'Technical Issue', description: '' });
@@ -184,7 +237,35 @@ export default function FacultyProfile() {
         },
     });
 
-    const completedEnrollments = (completedQuery.data || []).filter(e => e.completed_at || e.certificate_issued);
+    const completedOfficialTests = useMemo(() => {
+        const testsById = new Map((testsQuery.data || []).map(t => [t.id, t]));
+        const submittedAttempts = (attemptsQuery.data || []).filter(a => a.test_id && a.submitted_at);
+        const latestPassedByTest = new Map<string, (typeof submittedAttempts)[number]>();
+
+        submittedAttempts.forEach((attempt) => {
+            if (!attempt.test_id) return;
+            const passMarks = testsById.get(attempt.test_id)?.pass_marks ?? 70;
+            if ((attempt.accuracy || 0) < passMarks) return;
+
+            const existing = latestPassedByTest.get(attempt.test_id);
+            if (!existing) {
+                latestPassedByTest.set(attempt.test_id, attempt);
+                return;
+            }
+
+            const currentTime = new Date(attempt.submitted_at || attempt.started_at).getTime();
+            const existingTime = new Date(existing.submitted_at || existing.started_at).getTime();
+            if (currentTime > existingTime) {
+                latestPassedByTest.set(attempt.test_id, attempt);
+            }
+        });
+
+        return Array.from(latestPassedByTest.values()).sort(
+            (a, b) =>
+                new Date(b.submitted_at || b.started_at).getTime() -
+                new Date(a.submitted_at || a.started_at).getTime()
+        );
+    }, [attemptsQuery.data, testsQuery.data]);
 
     if (!user) return null;
 
@@ -220,7 +301,7 @@ export default function FacultyProfile() {
                             <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-semibold h-7 rounded-lg">VERIFIED FACULTY</Badge>
                         </div>
                         <div className="flex flex-wrap items-center gap-6 text-slate-500 font-semibold">
-                            <span className="flex items-center gap-2"><Briefcase className="h-4 w-4 text-blue-500" /> {user.designation}</span>
+                            <span className="flex items-center gap-2"><Briefcase className="h-4 w-4 text-blue-500" /> {profile?.designation || user.designation}</span>
                             <span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-rose-500" /> {profile?.department || 'Faculty Division'}</span>
                             <span className="flex items-center gap-2 font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">
                                 <Award className="h-4 w-4" /> {profile?.experience_years || 0} Years Exp
@@ -229,10 +310,16 @@ export default function FacultyProfile() {
                     </div>
 
                     <div className="flex gap-3 pb-4">
-                        <Button className="rounded-2xl h-14 px-8 font-bold bg-white text-slate-900 border-2 border-slate-100 shadow-xl shadow-slate-200/50 hover:bg-slate-50 transition-all">
+                        <Button
+                            onClick={handleOpenProfileEdit}
+                            className="rounded-2xl h-14 px-8 font-bold bg-white text-slate-900 border-2 border-slate-100 shadow-xl shadow-slate-200/50 hover:bg-slate-50 transition-all"
+                        >
                             EDIT PROFILE
                         </Button>
-                        <Button className="rounded-2xl h-14 px-8 font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-600/30 transition-all">
+                        <Button
+                            onClick={handlePublicView}
+                            className="rounded-2xl h-14 px-8 font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-600/30 transition-all"
+                        >
                             PUBLIC VIEW
                         </Button>
                     </div>
@@ -339,43 +426,47 @@ export default function FacultyProfile() {
                         </CardContent>
                     </Card>
 
-                    {/* Completed Certificates */}
+                    {/* Official Test Completions */}
                     <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[40px] bg-white overflow-hidden">
-                        <div className="h-2 w-full bg-gradient-to-r from-emerald-400 to-blue-500" />
+                        <div className="h-2 w-full bg-gradient-to-r from-blue-500 to-indigo-500" />
                         <CardHeader className="p-10 pb-0">
                             <CardTitle className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
-                                <Award className="h-7 w-7 text-emerald-500" /> Earned Certifications
+                                <CheckCircle2 className="h-7 w-7 text-blue-600" /> Official Test Completions
                             </CardTitle>
-                            <CardDescription className="text-slate-400 font-semibold mt-1 uppercase tracking-widest text-[10px]">Validated Learning Path Achievements</CardDescription>
+                            <CardDescription className="text-slate-400 font-semibold mt-1 uppercase tracking-widest text-[10px]">
+                                {completedOfficialTests.length} Tests Cleared
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="p-10">
-                            {completedEnrollments.length === 0 ? (
+                            {completedOfficialTests.length === 0 ? (
                                 <div className="text-center py-12 px-6 rounded-3xl border-2 border-dashed border-slate-100">
-                                    <p className="text-slate-400 font-semibold uppercase tracking-widest text-[11px]">No certifications earned yet</p>
-                                    <p className="text-slate-300 text-xs mt-2">Finish enrolled courses to unlock official certificates</p>
+                                    <p className="text-slate-400 font-semibold uppercase tracking-widest text-[11px]">No official tests passed yet</p>
+                                    <p className="text-slate-300 text-xs mt-2">Pass an official test to see completion status here</p>
                                 </div>
                             ) : (
-                                <div className="grid gap-6 md:grid-cols-2">
-                                    {completedEnrollments.map(enrollment => {
-                                        const course = allCoursesQuery.data?.find(c => c.id === enrollment.course_id);
+                                <div className="space-y-4">
+                                    {completedOfficialTests.map(attempt => {
+                                        const test = testsQuery.data?.find(t => t.id === attempt.test_id);
                                         return (
-                                            <div key={enrollment.id} className="p-6 rounded-3xl border border-slate-100 bg-slate-50/50 flex items-start gap-4 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all group">
-                                                <div className="h-16 w-16 shrink-0 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                    <Award className="h-8 w-8 text-emerald-500" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h4 className="font-bold text-slate-900 truncate leading-tight mb-1">{course?.title || "Course Completed"}</h4>
-                                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
-                                                        Earned {enrollment.completed_at ? format(new Date(enrollment.completed_at), 'MMM yyyy') : 'Recently'}
+                                            <div key={attempt.id} className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 flex items-center justify-between gap-4">
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-slate-900 truncate">{test?.title || attempt.test_title || 'Official Test'}</p>
+                                                    <p className="text-[11px] text-slate-500 font-semibold mt-1">
+                                                        Passed {format(new Date(attempt.submitted_at || attempt.started_at), 'MMM d, yyyy')}
                                                     </p>
-                                                    <a
-                                                        href={`/faculty/courses/${enrollment.course_id}/certificate`}
-                                                        target="_blank"
-                                                        className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 group/link"
-                                                    >
-                                                        DOWNLOAD CERTIFICATE
-                                                        <ExternalLink className="h-3 w-3 group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
-                                                    </a>
+                                                </div>
+                                                <div className="flex items-center gap-4 shrink-0">
+                                                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 font-bold h-7">
+                                                        {Math.round(attempt.accuracy || 0)}%
+                                                    </Badge>
+                                                    {attempt.test_id && (
+                                                        <button
+                                                            onClick={() => navigate(`/faculty/tests/${attempt.test_id}/result/${attempt.id}`)}
+                                                            className="text-xs font-bold text-blue-600 hover:text-blue-700"
+                                                        >
+                                                            VIEW RESULT
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -501,6 +592,39 @@ export default function FacultyProfile() {
                         <Button type="submit" className="flex-1 h-12 rounded-2xl font-bold bg-blue-600 text-white shadow-lg shadow-blue-600/20">{editingSkill ? "Update Level" : "Integrate Skill"}</Button>
                     </div>
                 </form>
+            </Modal>
+
+            <Modal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} title="Edit Profile">
+                <div className="space-y-4 pt-2">
+                    <Input
+                        label="Department"
+                        value={profileForm.department}
+                        onChange={(e) => setProfileForm((p) => ({ ...p, department: e.target.value }))}
+                        placeholder="e.g. Computer Science"
+                    />
+                    <Input
+                        label="Designation"
+                        value={profileForm.designation}
+                        onChange={(e) => setProfileForm((p) => ({ ...p, designation: e.target.value }))}
+                        placeholder="e.g. Assistant Professor"
+                    />
+                    <Input
+                        label="Experience (Years)"
+                        type="number"
+                        min={0}
+                        value={profileForm.experience_years}
+                        onChange={(e) => setProfileForm((p) => ({ ...p, experience_years: e.target.value }))}
+                        placeholder="e.g. 8"
+                    />
+                    <div className="flex gap-3 pt-2">
+                        <Button type="button" variant="ghost" className="flex-1" onClick={() => setIsProfileModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={saveProfile} disabled={updateProfileMutation.isPending}>
+                            {updateProfileMutation.isPending ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </div>
+                </div>
             </Modal>
         </div>
     );

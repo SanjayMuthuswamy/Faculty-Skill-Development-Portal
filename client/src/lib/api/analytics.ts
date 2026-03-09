@@ -13,6 +13,8 @@ export interface FacultyAnalytics {
     strengths?: string;
     weaknesses?: string;
     recommendations?: string[];
+    ai_suggestion?: string;
+    ai_source?: string;
 }
 
 export interface DepartmentSummary {

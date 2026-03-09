@@ -40,15 +40,6 @@ async def init_db() -> None:
             )
             session.add(admin)
             await session.flush()
-            
-            # Create faculty profile for admin so they can test faculty features
-            admin_profile = FacultyProfile(
-                id=str(uuid4()),
-                user_id=admin.id,
-                department="Administration",
-                designation="Administrator"
-            )
-            session.add(admin_profile)
             logger.info("Created admin user: admin@fsdp.com / Admin@123")
 
         # Check if faculty user exists

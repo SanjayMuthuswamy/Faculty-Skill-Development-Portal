@@ -16,6 +16,7 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
+import { useToast } from '../../components/ui/Toast';
 import { cn } from '../../lib/utils';
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -75,6 +76,7 @@ export default function CoursesPage() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const { addToast } = useToast();
     const [search, setSearch] = useState('');
     const [levelFilter, setLevelFilter] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
@@ -99,8 +101,14 @@ export default function CoursesPage() {
         mutationFn: (courseId: string) => coursesApi.enrollInCourse(courseId),
         onSuccess: (_, courseId) => {
             queryClient.invalidateQueries({ queryKey: ['course-enrollments'] });
+            queryClient.invalidateQueries({ queryKey: ['my-course-enrollments'] });
             navigate(`/faculty/courses/${courseId}`);
         },
+        onError: (error: any) => {
+            const detail = error?.response?.data?.detail;
+            const message = typeof detail === 'string' ? detail : 'Failed to enroll in course';
+            addToast(message, 'error');
+        }
     });
 
     const categories = useMemo(() => {
@@ -168,7 +176,16 @@ export default function CoursesPage() {
                             </div>
                             Recommended for {user?.name.split(' ')[0]}
                         </h2>
-                        <Button variant="ghost" className="text-indigo-600 font-bold hover:bg-indigo-50 rounded-xl gap-2">
+                        <Button
+                            variant="ghost"
+                            className="text-indigo-600 font-bold hover:bg-indigo-50 rounded-xl gap-2"
+                            onClick={() => {
+                                setSearch('');
+                                setLevelFilter('');
+                                setActiveCategory('All');
+                                document.getElementById('available-courses')?.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                        >
                             VIEW ALL SUGGESTIONS <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
@@ -224,7 +241,7 @@ export default function CoursesPage() {
             )}
 
             {/* ── CONTROLS & CATALOG ──────────────────────────────────── */}
-            <div className="space-y-8">
+            <div className="space-y-8" id="available-courses">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-2 border-b border-slate-100">
                     <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Available Courses</h2>
                     <div className="flex gap-3 w-full md:w-auto">
@@ -238,10 +255,19 @@ export default function CoursesPage() {
                                 className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white border border-slate-200 text-sm font-semibold focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all"
                             />
                         </div>
-                        <Button variant="ghost" className="h-12 w-12 rounded-2xl bg-white border border-slate-200 text-slate-900 hover:bg-slate-50 relative">
-                            <Filter className="h-5 w-5" />
-                            {levelFilter && <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-blue-600 border-2 border-white" />}
-                        </Button>
+                        <div className="relative w-44">
+                            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <select
+                                value={levelFilter}
+                                onChange={(e) => setLevelFilter(e.target.value)}
+                                className="w-full h-12 pl-11 pr-4 rounded-2xl bg-white border border-slate-200 text-sm font-semibold focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all capitalize"
+                            >
+                                <option value="">All levels</option>
+                                <option value="beginner">Beginner</option>
+                                <option value="intermediate">Intermediate</option>
+                                <option value="advanced">Advanced</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 

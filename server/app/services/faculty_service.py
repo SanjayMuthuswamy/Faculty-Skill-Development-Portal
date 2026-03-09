@@ -5,6 +5,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, attributes
+from sqlalchemy.exc import IntegrityError
 
 from app.models.user import User
 from app.models.enums import UserRole
@@ -14,6 +15,8 @@ from app.models.faculty_skill import FacultySkill, SkillStatus
 from app.models.skill import Skill
 from app.models.faculty_news_preferences import FacultyNewsPreferences
 from app.models.course_enrollment import CourseEnrollment
+from app.models.course import Course
+from app.models.course_module import CourseModule
 from app.schemas.faculty import FacultyProfileUpdate, FacultyCreateRequest
 from app.schemas.skill import FacultySkillCreate, FacultySkillUpdate
 from app.schemas.news import NewsPreferencesUpdate
@@ -33,7 +36,10 @@ class FacultyService:
             .options(
                 selectinload(FacultyProfile.user),
                 selectinload(FacultyProfile.skills).selectinload(FacultySkill.skill),
-                selectinload(FacultyProfile.course_enrollments).selectinload(CourseEnrollment.course)
+                selectinload(FacultyProfile.course_enrollments)
+                .selectinload(CourseEnrollment.course)
+                .selectinload(Course.modules)
+                .selectinload(CourseModule.quiz_questions)
             )
         )
         return result.scalars().all()
@@ -58,7 +64,11 @@ class FacultyService:
             .where(FacultyProfile.user_id == user_id)
             .options(
                 selectinload(FacultyProfile.user),
-                selectinload(FacultyProfile.skills).selectinload(FacultySkill.skill)
+                selectinload(FacultyProfile.skills).selectinload(FacultySkill.skill),
+                selectinload(FacultyProfile.course_enrollments)
+                .selectinload(CourseEnrollment.course)
+                .selectinload(Course.modules)
+                .selectinload(CourseModule.quiz_questions)
             )
         )
         return result.scalar_one_or_none()
@@ -127,17 +137,33 @@ class FacultyService:
         return await self.get_by_user_id(user_id)
     
     async def add_skill(self, faculty_id: str, skill_in: FacultySkillCreate) -> FacultySkill:
-        # Check if skill exists, else create
+        # Check if skill exists, else create (race-safe with IntegrityError retry)
         result = await self.db.execute(select(Skill).where(Skill.name == skill_in.skill_name))
         skill = result.scalar_one_or_none()
-        
+
         if not skill:
             skill = Skill(name=skill_in.skill_name, domain=skill_in.domain)
             self.db.add(skill)
-            await self.db.commit()
-            await self.db.refresh(skill)
-            
-        # Create link
+            try:
+                await self.db.flush()
+            except IntegrityError:
+                await self.db.rollback()
+                # Another request created it first; re-fetch and continue.
+                result = await self.db.execute(select(Skill).where(Skill.name == skill_in.skill_name))
+                skill = result.scalar_one_or_none()
+                if not skill:
+                    raise ValueError("Failed to create or fetch skill")
+
+        # Fast-path duplicate check before insert
+        existing_link = await self.db.execute(
+            select(FacultySkill).where(
+                FacultySkill.faculty_id == faculty_id,
+                FacultySkill.skill_id == skill.id,
+            )
+        )
+        if existing_link.scalar_one_or_none():
+            raise ValueError("Skill already added for this faculty")
+
         db_skill = FacultySkill(
             faculty_id=faculty_id,
             skill_id=skill.id,
@@ -145,7 +171,11 @@ class FacultyService:
             status=SkillStatus.UNVERIFIED
         )
         self.db.add(db_skill)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise ValueError("Skill already added for this faculty")
 
         # Re-fetch with skill relationship loaded so the nested skill data is available
         result = await self.db.execute(
@@ -155,8 +185,11 @@ class FacultyService:
         )
         return result.scalar_one()
         
-    async def verify_skill(self, faculty_skill_id: str) -> bool:
-        result = await self.db.execute(select(FacultySkill).where(FacultySkill.id == faculty_skill_id))
+    async def verify_skill(self, faculty_skill_id: str, faculty_id: Optional[str] = None) -> bool:
+        stmt = select(FacultySkill).where(FacultySkill.id == faculty_skill_id)
+        if faculty_id is not None:
+            stmt = stmt.where(FacultySkill.faculty_id == faculty_id)
+        result = await self.db.execute(stmt)
         f_skill = result.scalar_one_or_none()
         if f_skill:
             f_skill.status = SkillStatus.VERIFIED
@@ -164,8 +197,16 @@ class FacultyService:
             return True
         return False
 
-    async def update_faculty_skill(self, faculty_skill_id: str, skill_in: FacultySkillUpdate) -> Optional[FacultySkill]:
-        result = await self.db.execute(select(FacultySkill).where(FacultySkill.id == faculty_skill_id))
+    async def update_faculty_skill(
+        self,
+        faculty_skill_id: str,
+        skill_in: FacultySkillUpdate,
+        faculty_id: Optional[str] = None,
+    ) -> Optional[FacultySkill]:
+        stmt = select(FacultySkill).where(FacultySkill.id == faculty_skill_id)
+        if faculty_id is not None:
+            stmt = stmt.where(FacultySkill.faculty_id == faculty_id)
+        result = await self.db.execute(stmt)
         f_skill = result.scalar_one_or_none()
         if not f_skill:
             return None
@@ -177,8 +218,11 @@ class FacultyService:
         await self.db.refresh(f_skill)
         return f_skill
 
-    async def remove_skill(self, faculty_skill_id: str) -> bool:
-        result = await self.db.execute(select(FacultySkill).where(FacultySkill.id == faculty_skill_id))
+    async def remove_skill(self, faculty_skill_id: str, faculty_id: Optional[str] = None) -> bool:
+        stmt = select(FacultySkill).where(FacultySkill.id == faculty_skill_id)
+        if faculty_id is not None:
+            stmt = stmt.where(FacultySkill.faculty_id == faculty_id)
+        result = await self.db.execute(stmt)
         f_skill = result.scalar_one_or_none()
         if f_skill:
             await self.db.delete(f_skill)

@@ -401,9 +401,13 @@ Requirements:
    - goals: 2-3 specific, measurable learning goals
    - topics: 2-4 core topics to study
    - resources: 2-3 learning resources with title and URL (use real documentation / tutorial URLs)
-   - practice: 2-3 hands-on exercises or mini-projects
+   - practice: 4-6 action items with these prefixes:
+     - at least 1 item starting with "TEST:" (timed practice test with target score)
+     - at least 1 item starting with "BUILD:" (artifact/implementation work)
+     - at least 1 item starting with "REVIEW:" (non-common requirement: peer review, benchmark, reflection, or teach-back)
 3. Make progression logical (basics first, advanced later).
 4. Output strictly in JSON format with NO additional text.
+5. Avoid generic items like "practice more" or "read docs". Every item must be concrete and measurable.
 
 Output JSON structure ONLY:
 {{
@@ -416,7 +420,11 @@ Output JSON structure ONLY:
         {{"title": "Official Documentation", "url": "https://example.com/docs"}},
         {{"title": "Beginner Tutorial", "url": "https://example.com/tutorial"}}
       ],
-      "practice": ["Complete getting-started tutorial", "Build a hello-world project"]
+      "practice": [
+        "TEST: Attempt a 20-question timed quiz on core concepts; target >= 75%",
+        "BUILD: Create and run a minimal working project covering this week's topics",
+        "REVIEW: Record a 5-minute teach-back summary and capture 3 improvement points"
+      ]
     }}
   ]
 }}

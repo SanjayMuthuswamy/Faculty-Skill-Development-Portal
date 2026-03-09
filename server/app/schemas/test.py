@@ -26,10 +26,13 @@ class TestCreate(TestBase):
 
 class TestUpdate(BaseModel):
     title: Optional[str] = None
+    description: Optional[str] = None
     domain: Optional[SkillDomain] = None
     difficulty: Optional[Difficulty] = None
     pass_marks: Optional[int] = None
     time_limit_minutes: Optional[int] = None
+    pack_ids: Optional[List[str]] = None
+    question_ids: Optional[List[str]] = None
 
 class Test(TestBase):
     id: str
@@ -37,6 +40,8 @@ class Test(TestBase):
     created_by_id: str
     created_at: datetime
     questions: List[Question] = []
+    pack_ids: List[str] = []
+    question_ids: List[str] = []
 
     class Config:
         from_attributes = True

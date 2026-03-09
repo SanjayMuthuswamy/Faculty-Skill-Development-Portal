@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { testsApi, Difficulty } from '../../lib/api/tests';
-import { attemptsApi } from '../../lib/api/attempts';
+import { attemptsApi, Attempt } from '../../lib/api/attempts';
 import { practiceSetsApi } from '../../lib/api/practiceSets';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
-import { PlayCircle, Clock, Award, History, ArrowRight, Search, Filter, Sparkles } from 'lucide-react';
+import { PlayCircle, Clock, Award, History, Search, Filter, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { Pagination } from '../../components/ui/Pagination';
 import { cn } from '../../lib/utils';
@@ -48,6 +48,59 @@ export default function FacultyTests() {
     const filteredTests = Array.isArray(tests) ? tests.filter(test =>
         filterDifficulty === 'ALL' || test.difficulty === filterDifficulty
     ) : [];
+
+    const submittedAttempts = useMemo(
+        () => (attempts || []).filter((a) => Boolean(a.submitted_at)),
+        [attempts]
+    );
+
+    const testsById = useMemo(() => {
+        const map = new Map<string, (typeof filteredTests)[number]>();
+        (tests || []).forEach((t) => map.set(t.id, t));
+        return map;
+    }, [tests]);
+
+    const getAttemptPassMarks = (attempt: Attempt) => {
+        if (!attempt.test_id) return 70;
+        return testsById.get(attempt.test_id)?.pass_marks ?? 70;
+    };
+
+    const isAttemptPassed = (attempt: Attempt) => (attempt.accuracy || 0) >= getAttemptPassMarks(attempt);
+
+    const completionByTestId = useMemo(() => {
+        const byTest = new Map<string, Attempt[]>();
+        submittedAttempts.forEach((attempt) => {
+            if (!attempt.test_id) return;
+            const items = byTest.get(attempt.test_id) || [];
+            items.push(attempt);
+            byTest.set(attempt.test_id, items);
+        });
+
+        const completion = new Map<string, {
+            latestAttempt?: Attempt;
+            latestPassedAttempt?: Attempt;
+            passed: boolean;
+            attemptsCount: number;
+        }>();
+
+        const byLatest = (a: Attempt, b: Attempt) =>
+            new Date(b.submitted_at || b.started_at).getTime() - new Date(a.submitted_at || a.started_at).getTime();
+
+        (tests || []).forEach((test) => {
+            const attemptsForTest = (byTest.get(test.id) || []).slice().sort(byLatest);
+            const latestAttempt = attemptsForTest[0];
+            const passedAttempts = attemptsForTest.filter((a) => (a.accuracy || 0) >= test.pass_marks);
+
+            completion.set(test.id, {
+                latestAttempt,
+                latestPassedAttempt: passedAttempts[0],
+                passed: passedAttempts.length > 0,
+                attemptsCount: attemptsForTest.length,
+            });
+        });
+
+        return completion;
+    }, [submittedAttempts, tests]);
 
     const getTestTitle = (testId?: string) => {
         if (!Array.isArray(tests)) return 'Official Test';
@@ -106,22 +159,33 @@ export default function FacultyTests() {
                                 <Search className="h-12 w-12 text-slate-200 mx-auto mb-4" />
                                 <p className="text-slate-500 font-medium">No tests found for the selected filter.</p>
                             </div>
-                        ) : pagedTests?.map((test) => (
+                        ) : pagedTests?.map((test) => {
+                            const completion = completionByTestId.get(test.id);
+                            const isCompleted = Boolean(completion?.passed);
+                            const latestPassed = completion?.latestPassedAttempt;
+                            const latestAttempt = completion?.latestAttempt;
+
+                            return (
                             <Card key={test.id} className="flex flex-col border-none shadow-sm hover:shadow-md transition-all duration-300 group overflow-hidden">
                                 <div className="h-1.5 w-full bg-blue-600" />
                                 <CardHeader className="pb-4">
                                     <div className="flex justify-between items-start mb-3">
                                         <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">{test.domain}</Badge>
-                                        <Badge
-                                            className={cn(
-                                                "capitalize",
-                                                test.difficulty === Difficulty.BEGINNER ? 'bg-green-50 text-green-700 border-green-100' :
-                                                    test.difficulty === Difficulty.INTERMEDIATE ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                                        'bg-rose-50 text-rose-700 border-rose-100'
+                                        <div className="flex items-center gap-2">
+                                            <Badge
+                                                className={cn(
+                                                    "capitalize",
+                                                    test.difficulty === Difficulty.BEGINNER ? 'bg-green-50 text-green-700 border-green-100' :
+                                                        test.difficulty === Difficulty.INTERMEDIATE ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                                            'bg-rose-50 text-rose-700 border-rose-100'
+                                                )}
+                                            >
+                                                {test.difficulty.toLowerCase()}
+                                            </Badge>
+                                            {isCompleted && (
+                                                <Badge className="bg-emerald-600 text-white border-none">Completed</Badge>
                                             )}
-                                        >
-                                            {test.difficulty.toLowerCase()}
-                                        </Badge>
+                                        </div>
                                     </div>
                                     <CardTitle className="text-xl leading-tight text-slate-900">{test.title}</CardTitle>
                                     <CardDescription className="line-clamp-2 min-h-[40px] mt-1 text-slate-500">{test.description}</CardDescription>
@@ -141,18 +205,48 @@ export default function FacultyTests() {
                                             <span>Pass: {test.pass_marks}%</span>
                                         </div>
                                     </div>
+                                    {latestPassed && (
+                                        <p className="mt-3 text-xs font-semibold text-emerald-700">
+                                            Passed on {format(new Date(latestPassed.submitted_at || latestPassed.started_at), 'MMM d, yyyy')} ({Math.round(latestPassed.accuracy || 0)}%)
+                                        </p>
+                                    )}
+                                    {!latestPassed && latestAttempt && (
+                                        <p className="mt-3 text-xs font-semibold text-slate-500">
+                                            Last attempt: {Math.round(latestAttempt.accuracy || 0)}%
+                                        </p>
+                                    )}
                                 </CardContent>
-                                <div className="p-6 pt-0 mt-auto">
+                                <div className="p-6 pt-0 mt-auto space-y-2">
                                     <Button
-                                        className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20 py-6 font-bold"
-                                        onClick={() => navigate(`/faculty/tests/${test.id}/play`)}
+                                        className={cn(
+                                            "w-full rounded-xl py-6 font-bold",
+                                            isCompleted
+                                                ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
+                                                : "bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20"
+                                        )}
+                                        onClick={() => {
+                                            if (isCompleted && latestPassed?.id) {
+                                                navigate(`/faculty/tests/${test.id}/result/${latestPassed.id}`);
+                                                return;
+                                            }
+                                            navigate(`/faculty/tests/${test.id}/play`);
+                                        }}
                                     >
                                         <PlayCircle className="mr-2 h-5 w-5" />
-                                        Start Test
+                                        {isCompleted ? 'View Completed Result' : 'Start Test'}
                                     </Button>
+                                    {isCompleted && (
+                                        <Button
+                                            variant="outline"
+                                            className="w-full rounded-xl py-5 font-semibold border-slate-200"
+                                            onClick={() => navigate(`/faculty/tests/${test.id}/play`)}
+                                        >
+                                            Retake Test
+                                        </Button>
+                                    )}
                                 </div>
                             </Card>
-                        ))}
+                        )})}
                     </div>
 
                     {filteredTests.length > ITEMS_PER_PAGE && (
@@ -187,7 +281,7 @@ export default function FacultyTests() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {attempts?.length === 0 ? (
+                                    {submittedAttempts.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={5} className="text-center py-16 text-slate-400 border-none">
                                                 <div className="flex flex-col items-center">
@@ -196,14 +290,14 @@ export default function FacultyTests() {
                                                 </div>
                                             </TableCell>
                                         </TableRow>
-                                    ) : attempts?.slice().reverse().slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE).map((attempt) => (
+                                    ) : submittedAttempts.slice().reverse().slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE).map((attempt) => (
                                         <TableRow key={attempt.id} className="hover:bg-slate-50/50 transition-colors">
                                             <TableCell className="font-bold text-slate-900">{attempt.test_title || getTestTitle(attempt.test_id)}</TableCell>
                                             <TableCell className="text-slate-500 font-medium">{format(new Date(attempt.submitted_at || attempt.started_at), 'MMM d, yyyy')}</TableCell>
                                             <TableCell>
                                                 <span className={cn(
                                                     "font-bold",
-                                                    (attempt.accuracy || 0) >= 70 ? 'text-green-600' : 'text-rose-600'
+                                                    isAttemptPassed(attempt) ? 'text-green-600' : 'text-rose-600'
                                                 )}>
                                                     {attempt.score}/{attempt.total}
                                                 </span>
@@ -211,7 +305,7 @@ export default function FacultyTests() {
                                             <TableCell>
                                                 <Badge className={cn(
                                                     "font-bold uppercase tracking-widest text-[9px] h-6 px-2 shadow-sm border-none",
-                                                    (attempt.accuracy || 0) >= 70 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                                                    isAttemptPassed(attempt) ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
                                                 )}>
                                                     {Math.round(attempt.accuracy || 0)}%
                                                 </Badge>
@@ -233,10 +327,10 @@ export default function FacultyTests() {
                                 </TableBody>
                             </Table>
                         </Card>
-                        {(attempts || []).length > ITEMS_PER_PAGE && (
+                        {submittedAttempts.length > ITEMS_PER_PAGE && (
                             <Pagination
                                 currentPage={historyPage}
-                                totalPages={Math.ceil((attempts || []).length / ITEMS_PER_PAGE)}
+                                totalPages={Math.ceil(submittedAttempts.length / ITEMS_PER_PAGE)}
                                 onPageChange={setHistoryPage}
                             />
                         )}

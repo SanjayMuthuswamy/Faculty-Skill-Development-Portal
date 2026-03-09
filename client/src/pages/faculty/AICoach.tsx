@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { aiCoachApi, ChatMessage } from '../../lib/api/aiCoach';
+import { useNavigate } from 'react-router-dom';
 import { Bot, Send, Loader2, Sparkles, RotateCcw } from 'lucide-react';
 
 const QUICK_ACTIONS = [
@@ -12,7 +13,7 @@ const QUICK_ACTIONS = [
     'Which topics need attention?',
 ];
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({ msg, onAction }: { msg: ChatMessage; onAction: (url: string) => void }) {
     const isUser = msg.role === 'user';
     return (
         <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -28,12 +29,29 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
                     }`}
             >
                 {msg.content}
+                {!isUser && msg.actions && msg.actions.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                        {msg.actions.map((action, idx) => (
+                            <button
+                                key={`${action.url}-${idx}`}
+                                onClick={() => onAction(action.url)}
+                                className="w-full text-left px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors"
+                            >
+                                <p className="text-xs font-bold">{action.label}</p>
+                                {action.description && (
+                                    <p className="text-[11px] text-blue-600 mt-0.5">{action.description}</p>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
 }
 
 export default function AICoachPage() {
+    const navigate = useNavigate();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<ChatMessage[]>([{
         role: 'assistant',
@@ -48,7 +66,7 @@ export default function AICoachPage() {
         onSuccess: (data) => {
             setMessages(prev => [
                 ...prev,
-                { role: 'assistant', content: data.reply },
+                { role: 'assistant', content: data.reply, actions: data.actions || [] },
             ]);
         },
         onError: () => {
@@ -98,6 +116,14 @@ export default function AICoachPage() {
     };
 
     const showQuickActions = messages.length <= 1 && !mutation.isPending;
+    const handleAction = (url: string) => {
+        if (!url) return;
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+            return;
+        }
+        navigate(url);
+    };
 
     return (
         <div className="flex flex-col h-[calc(100vh-8rem)] max-w-3xl mx-auto">
@@ -125,7 +151,7 @@ export default function AICoachPage() {
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto bg-slate-50 rounded-2xl border border-slate-100 p-4 space-y-4 min-h-0">
                 {messages.map((msg, i) => (
-                    <MessageBubble key={i} msg={msg} />
+                    <MessageBubble key={i} msg={msg} onAction={handleAction} />
                 ))}
 
                 {/* Typing indicator */}

@@ -18,9 +18,11 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function AdminDashboard() {
     const [searchQuery, setSearchQuery] = useState('');
+    const navigate = useNavigate();
 
     const { data: departmentStats, isLoading: isLoadingDept } = useQuery({
         queryKey: ['admin-dept-summary'],
@@ -279,6 +281,7 @@ export default function AdminDashboard() {
                                                     variant="ghost"
                                                     size="sm"
                                                     className="h-8 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg group/btn"
+                                                    onClick={() => navigate(`/admin/faculty/${f.id}`)}
                                                 >
                                                     Review <ChevronRight className="ml-1 h-3.5 w-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
                                                 </Button>

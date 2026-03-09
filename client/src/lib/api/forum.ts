@@ -39,7 +39,7 @@ export const forumApi = {
     listDiscussions: (category?: string): Promise<Discussion[]> =>
         http.get('/api/v1/discussions', { params: category ? { category } : {} }).then(r => r.data),
 
-    getDiscussion: (id: string): Promise<Discussion> =>
+    getDiscussion: (id: string): Promise<DiscussionDetail> =>
         http.get(`/api/v1/discussions/${id}`).then(r => r.data),
 
     createDiscussion: (data: Partial<Discussion>): Promise<Discussion> =>

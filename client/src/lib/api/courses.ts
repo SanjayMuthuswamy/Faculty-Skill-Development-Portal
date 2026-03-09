@@ -64,6 +64,12 @@ export interface CourseProgress {
     progress_pct: number;
     avg_quiz_score?: number;
     all_done: boolean;
+    module_progress: {
+        module_id: string;
+        completed: boolean;
+        quiz_score?: number;
+        quiz_passed: boolean;
+    }[];
 }
 
 export interface AssessmentQuestion {

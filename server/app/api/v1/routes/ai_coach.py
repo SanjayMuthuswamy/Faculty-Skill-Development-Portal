@@ -21,8 +21,16 @@ class ChatRequest(BaseModel):
     history: List[ChatMessageIn] = []
 
 
+class ChatAction(BaseModel):
+    kind: str
+    label: str
+    url: str
+    description: str = ""
+
+
 class ChatResponse(BaseModel):
     reply: str
+    actions: List[ChatAction] = []
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -45,10 +53,10 @@ async def chat_with_coach(
     service = AICoachService(db)
     history = [{"role": m.role, "content": m.content} for m in request.history]
 
-    reply = await service.chat(
+    payload = await service.chat(
         faculty_id=current_user.faculty_profile.id,
         user_message=request.message,
         history=history
     )
 
-    return ChatResponse(reply=reply)
+    return ChatResponse(reply=payload.get("reply", ""), actions=payload.get("actions", []))

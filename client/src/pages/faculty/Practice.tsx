@@ -42,7 +42,7 @@ export default function Practice() {
     const { data: aiSets } = useQuery({
         queryKey: ['ai-practice-sets', user?.id],
         queryFn: practiceSetsApi.listMySets,
-        enabled: !!user && activeTab === 'sandbox',
+        enabled: !!user,
     });
 
     const generateMutation = useMutation({
@@ -206,64 +206,6 @@ export default function Practice() {
                                 </Button>
                             </CardContent>
                         </Card>
-
-                        <div className="md:col-span-2 space-y-6">                            {aiSets?.length === 0 ? (
-                            <Card className="flex flex-col items-center justify-center py-12 text-center">
-                                <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                                    <Sparkles className="h-6 w-6 text-gray-400" />
-                                </div>
-                                <CardTitle className="text-lg">No AI Tests Yet</CardTitle>
-                                <CardDescription className="max-w-xs mx-auto mt-2">
-                                    Use the generator on the left to create custom tests based on your weak areas.
-                                </CardDescription>
-                            </Card>
-                        ) : (
-                            <div className="grid gap-4">
-                                {aiSets?.slice().reverse().map(set => (
-                                    <Card key={set.id} className="overflow-hidden">
-                                        <div className="flex items-center p-4">
-                                            <div className="h-10 w-10 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 mr-4">
-                                                <Sparkles className="h-5 w-5" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="flex items-center justify-between">
-                                                    <h4 className="font-semibold">{set.domain} Test - {set.source}</h4>
-                                                    <Badge variant="outline">{format(new Date(set.created_at), 'MMM d, h:mm a')}</Badge>
-                                                </div>
-                                                <div className="flex items-center gap-4 mt-1">
-                                                    <span className="text-xs text-gray-500">{set.questions.length} Questions</span>
-                                                    <span className="text-xs text-gray-500 capitalize">{set.difficulty.toLowerCase()}</span>
-                                                    {set.completed_at && (
-                                                        <span className={cn(
-                                                            "text-xs font-bold",
-                                                            (set.accuracy || 0) >= 70 ? "text-green-600" : "text-amber-600"
-                                                        )}>
-                                                            Score: {set.score}/{set.questions.length} ({set.accuracy}%)
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="ml-4">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => navigate(`/faculty/practice/play/${set.id}`)}
-                                                >
-                                                    {set.completed_at ? "Review" : "Start"} <ArrowRight className="ml-1 h-3 w-3" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                        {set.source === 'PACK' && set.completed_at && (set.accuracy || 0) >= 70 && (
-                                            <div className="bg-green-50 px-4 py-1.5 border-t border-green-100 flex items-center gap-2">
-                                                <Badge variant="success" className="text-[10px] h-4">VERIFIED PROGRESS</Badge>
-                                                <span className="text-[10px] text-green-700">This set counts toward your skill validation.</span>
-                                            </div>
-                                        )}
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
-                        </div>
                     </div>
                 )}
 

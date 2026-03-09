@@ -17,18 +17,8 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 const DEMO_USERS = [
   { name: 'Admin', email: 'sanjay@fsdp.com', password: '123456', role: 'ADMIN' },
+  { name: 'Admin (Alt)', email: 'admin@fsdp.com', password: 'Admin@123', role: 'ADMIN' },
   { name: 'Faculty User', email: 'faculty@fsdp.com', password: '123456', role: 'FACULTY' },
-  { name: 'Dr. John Doe', email: 'san@gmail.com', password: '123456', role: 'FACULTY' },
-  { name: 'Dr. Sarah Miller', email: 'sarah.m@example.edu', password: '123456', role: 'FACULTY' },
-  { name: 'Prof. James Wilson', email: 'james.w@example.edu', password: '123456', role: 'FACULTY' },
-  { name: 'Dr. Elena Rodriguez', email: 'elena.r@example.edu', password: '123456', role: 'FACULTY' },
-  { name: 'Dr. Robert Chen', email: 'robert.c@example.edu', password: '123456', role: 'FACULTY' },
-  { name: 'Ms. Anita Desai', email: 'anita.d@example.edu', password: '123456', role: 'FACULTY' },
-  { name: 'Sanjay', email: 'sanjay@fsdp.edu', password: '123456', role: 'FACULTY' },
-  { name: 'Sakthi', email: 'sakthi@fsdp.edu', password: '123456', role: 'FACULTY' },
-  { name: 'Vijay', email: 'vijay@fsdp.edu', password: '123456', role: 'FACULTY' },
-  { name: 'Ramesh', email: 'ramesh@fsdp.edu', password: '123456', role: 'FACULTY' },
-  { name: 'Suresh', email: 'suresh@fsdp.edu', password: '123456', role: 'FACULTY' },
 ]
 
 const LoginPage = () => {

@@ -153,6 +153,22 @@ class LessonProgressOut(BaseModel):
         from_attributes = True
 
 
+class ModuleProgressOut(BaseModel):
+    module_id: str
+    completed: bool = False
+    quiz_score: Optional[float] = None
+    quiz_passed: bool = False
+
+
+class CourseProgressOut(BaseModel):
+    total_modules: int
+    completed_modules: int
+    progress_pct: float
+    avg_quiz_score: Optional[float] = None
+    all_done: bool
+    module_progress: List[ModuleProgressOut] = []
+
+
 # ── Assessment ───────────────────────────────────────────────────────────────
 
 class AssessmentQuestionCreate(BaseModel):

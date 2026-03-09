@@ -2,6 +2,7 @@
 from typing import Optional, List
 from uuid import uuid4
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -10,14 +11,51 @@ from app.models.test import Test
 from app.models.test_pack import TestPack
 from app.models.test_question import TestQuestion
 from app.models.question_pack import QuestionPack
-from app.models.question import Question
-from app.schemas.test import TestCreate, TestUpdate
+from app.schemas.test import TestCreate
 
 class TestService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    def _attach_serialized_fields(self, db_test: Test) -> None:
+        questions = []
+        seen_ids = set()
+
+        for link in db_test.pack_links:
+            if link.pack:
+                for question in link.pack.questions:
+                    if question.id not in seen_ids:
+                        questions.append(question)
+                        seen_ids.add(question.id)
+
+        for link in db_test.question_links:
+            if link.question and link.question.id not in seen_ids:
+                questions.append(link.question)
+                seen_ids.add(link.question.id)
+
+        db_test.questions = questions
+        db_test.pack_ids = [link.pack_id for link in db_test.pack_links]
+        db_test.question_ids = [link.question_id for link in db_test.question_links]
+
+    async def _compute_total_questions(self, pack_ids: List[str], question_ids: List[str]) -> int:
+        seen_ids = set(question_ids)
+        for pack_id in pack_ids:
+            pack_res = await self.db.execute(
+                select(QuestionPack)
+                .where(QuestionPack.id == pack_id)
+                .options(selectinload(QuestionPack.questions))
+            )
+            pack = pack_res.scalar_one_or_none()
+            if pack:
+                for question in pack.questions:
+                    seen_ids.add(question.id)
+        return len(seen_ids)
+
     async def create_test(self, test_in: TestCreate, user_id: str) -> Test:
+        pack_ids = list(dict.fromkeys(test_in.pack_ids))
+        question_ids = list(dict.fromkeys(test_in.question_ids))
+        total_q = await self._compute_total_questions(pack_ids, question_ids)
+
         db_test = Test(
             id=str(uuid4()),
             created_by_id=user_id,
@@ -27,32 +65,20 @@ class TestService:
             difficulty=test_in.difficulty,
             pass_marks=test_in.pass_marks,
             time_limit_minutes=test_in.time_limit_minutes,
-            total_questions=0 # To be calculated
+            total_questions=total_q
         )
-        
+        self.db.add(db_test)
+
         # Link packs
-        total_q = 0
-        for pack_id in test_in.pack_ids:
+        for pack_id in pack_ids:
             link = TestPack(test_id=db_test.id, pack_id=pack_id)
             self.db.add(link)
-            
-            # Count questions
-            pack_res = await self.db.execute(select(QuestionPack).where(QuestionPack.id == pack_id).options(selectinload(QuestionPack.questions)))
-            pack = pack_res.scalar_one_or_none()
-            if pack:
-                total_q += len(pack.questions)
-        
+
         # Link individual questions
-        for question_id in test_in.question_ids:
-            # Check if already in a selected pack to avoid double counting
-            # For simplicity, we just add the link. The frontend handles selection logic.
+        for question_id in question_ids:
             q_link = TestQuestion(test_id=db_test.id, question_id=question_id)
             self.db.add(q_link)
-            total_q += 1
-            
-        db_test.total_questions = total_q
-        
-        self.db.add(db_test)
+
         await self.db.commit()
         await self.db.refresh(db_test)
         return db_test
@@ -69,26 +95,10 @@ class TestService:
         )
         result = await self.db.execute(query)
         db_tests = result.scalars().all()
-        
-        # Populate questions for each test for serialization
+
         for db_test in db_tests:
-            questions = []
-            seen_ids = set()
-            
-            for link in db_test.pack_links:
-                if link.pack:
-                    for q in link.pack.questions:
-                        if q.id not in seen_ids:
-                            questions.append(q)
-                            seen_ids.add(q.id)
-                            
-            for link in db_test.question_links:
-                if link.question and link.question.id not in seen_ids:
-                    questions.append(link.question)
-                    seen_ids.add(link.question.id)
-            
-            db_test.questions = questions
-            
+            self._attach_serialized_fields(db_test)
+
         return db_tests
 
     async def get_test(self, test_id: str) -> Optional[Test]:
@@ -103,43 +113,45 @@ class TestService:
         db_test = result.scalar_one_or_none()
         if not db_test:
             return None
-            
-        # Flatten questions for easier frontend consumption
-        questions = []
-        seen_ids = set()
-        
-        # From packs
-        for link in db_test.pack_links:
-            if link.pack:
-                for q in link.pack.questions:
-                    if q.id not in seen_ids:
-                        questions.append(q)
-                        seen_ids.add(q.id)
-                        
-        # From individual links
-        for link in db_test.question_links:
-            if link.question and link.question.id not in seen_ids:
-                questions.append(link.question)
-                seen_ids.add(link.question.id)
-                
-        # Attach to the object (this will be used by the schema)
-        db_test.questions = questions
+
+        self._attach_serialized_fields(db_test)
         return db_test
 
     async def update_test(self, test_id: str, test_in: dict) -> Optional[Test]:
         db_test = await self.get_test(test_id)
         if not db_test:
             return None
-        
-        # We don't handle pack/question link updates in this simple update for now
-        # Just basic fields
+
+        has_pack_ids = "pack_ids" in test_in
+        has_question_ids = "question_ids" in test_in
+        pack_ids = test_in.pop("pack_ids", None)
+        question_ids = test_in.pop("question_ids", None)
+
         for field, value in test_in.items():
             if hasattr(db_test, field) and field not in ["id", "created_at", "created_by_id"]:
                 setattr(db_test, field, value)
-        
+
+        if pack_ids is not None:
+            pack_ids = list(dict.fromkeys(pack_ids))
+            await self.db.execute(delete(TestPack).where(TestPack.test_id == test_id))
+            for pack_id in pack_ids:
+                self.db.add(TestPack(test_id=test_id, pack_id=pack_id))
+        else:
+            pack_ids = [link.pack_id for link in db_test.pack_links]
+
+        if question_ids is not None:
+            question_ids = list(dict.fromkeys(question_ids))
+            await self.db.execute(delete(TestQuestion).where(TestQuestion.test_id == test_id))
+            for question_id in question_ids:
+                self.db.add(TestQuestion(test_id=test_id, question_id=question_id))
+        else:
+            question_ids = [link.question_id for link in db_test.question_links]
+
+        if has_pack_ids or has_question_ids:
+            db_test.total_questions = await self._compute_total_questions(pack_ids, question_ids)
+
         await self.db.commit()
-        await self.db.refresh(db_test)
-        return db_test
+        return await self.get_test(test_id)
 
     async def delete_test(self, test_id: str) -> bool:
         db_test = await self.get_test(test_id)

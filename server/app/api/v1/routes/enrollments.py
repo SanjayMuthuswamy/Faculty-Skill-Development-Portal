@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 from app.api.v1.deps import get_current_user, get_session
 from app.models.user import User, UserRole
 from app.models.enrollment import Enrollment
+from app.models.program import Program
 from app.schemas.program import Enrollment as EnrollmentSchema, EnrollmentCreate
 
 router = APIRouter(tags=["enrollments"])
@@ -26,6 +28,25 @@ async def enroll_in_program(
     
     if not current_user.faculty_profile:
         raise HTTPException(status_code=400, detail="Faculty user has no profile")
+
+    # Program must exist and be currently enrollable.
+    program_result = await db.execute(select(Program).where(Program.id == enroll_in.program_id))
+    program = program_result.scalar_one_or_none()
+    if not program:
+        raise HTTPException(status_code=404, detail="Program not found")
+
+    now = datetime.now(timezone.utc)
+    end_date = program.end_date
+    start_date = program.start_date
+    if end_date and end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=timezone.utc)
+    if start_date and start_date.tzinfo is None:
+        start_date = start_date.replace(tzinfo=timezone.utc)
+
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=400, detail="Program has invalid dates")
+    if end_date and now > end_date:
+        raise HTTPException(status_code=400, detail="Program enrollment has ended")
         
     # Check if already enrolled
     result = await db.execute(

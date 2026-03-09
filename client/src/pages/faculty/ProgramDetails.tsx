@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { programsApi, ProgramStatus } from '../../lib/api/programs';
 import { enrollmentsApi } from '../../lib/api/enrollments';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { useToast } from '../../components/ui/Toast';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/ui/Card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Calendar, Users, Clock, ArrowLeft, CheckCircle2, List, Trophy, Loader2 } from 'lucide-react';
@@ -38,7 +37,8 @@ export default function ProgramDetails() {
             queryClient.invalidateQueries({ queryKey: ['enrollments'] });
         },
         onError: (error: any) => {
-            addToast(error.message || 'Failed to enroll', 'error');
+            const detail = error?.response?.data?.detail;
+            addToast(typeof detail === 'string' ? detail : (error.message || 'Failed to enroll'), 'error');
         }
     });
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { aiCoachApi, ChatMessage } from '../lib/api/aiCoach';
+import { useNavigate } from 'react-router-dom';
 import { Bot, X, Send, Loader2, ChevronDown, Sparkles } from 'lucide-react';
 
 const QUICK_ACTIONS = [
@@ -10,7 +11,7 @@ const QUICK_ACTIONS = [
     'Show my progress',
 ];
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({ msg, onAction }: { msg: ChatMessage; onAction: (url: string) => void }) {
     const isUser = msg.role === 'user';
     return (
         <div className={`flex gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -26,12 +27,29 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
                     }`}
             >
                 {msg.content}
+                {!isUser && msg.actions && msg.actions.length > 0 && (
+                    <div className="mt-2.5 space-y-1.5">
+                        {msg.actions.map((action, idx) => (
+                            <button
+                                key={`${action.url}-${idx}`}
+                                onClick={() => onAction(action.url)}
+                                className="w-full text-left px-2.5 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors"
+                            >
+                                <p className="text-[11px] font-bold">{action.label}</p>
+                                {action.description && (
+                                    <p className="text-[10px] text-blue-600 mt-0.5">{action.description}</p>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
 }
 
 export function AICoachChat() {
+    const navigate = useNavigate();
     const [open, setOpen] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -42,10 +60,10 @@ export function AICoachChat() {
     const mutation = useMutation({
         mutationFn: ({ message, history }: { message: string; history: ChatMessage[] }) =>
             aiCoachApi.chat(message, history),
-        onSuccess: (data, variables) => {
+        onSuccess: (data) => {
             setMessages(prev => [
                 ...prev,
-                { role: 'assistant', content: data.reply },
+                { role: 'assistant', content: data.reply, actions: data.actions || [] },
             ]);
         },
         onError: () => {
@@ -100,6 +118,14 @@ export function AICoachChat() {
     };
 
     const showQuickActions = messages.length <= 1 && !mutation.isPending;
+    const handleAction = (url: string) => {
+        if (!url) return;
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+            return;
+        }
+        navigate(url);
+    };
 
     return (
         <>
@@ -128,7 +154,7 @@ export function AICoachChat() {
                     {/* Messages */}
                     <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style={{ maxHeight: '380px' }}>
                         {messages.map((msg, i) => (
-                            <MessageBubble key={i} msg={msg} />
+                            <MessageBubble key={i} msg={msg} onAction={handleAction} />
                         ))}
 
                         {/* Typing indicator */}

@@ -21,6 +21,8 @@ class FacultyAnalytics(BaseModel):
     strengths: Optional[str] = None
     weaknesses: Optional[str] = None
     recommendations: List[str] = []
+    ai_suggestion: Optional[str] = None
+    ai_source: Optional[str] = None
 
 class DepartmentSummary(BaseModel):
     department: str

@@ -19,6 +19,7 @@ import CoursesPage from './pages/faculty/Courses';
 import CourseDetailPage from './pages/faculty/CourseDetail';
 import CourseAssessmentPage from './pages/faculty/CourseAssessment';
 import CourseCertificatePage from './pages/faculty/CourseCertificate';
+import ModuleQuizPage from './pages/faculty/ModuleQuiz';
 
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminPrograms from './pages/admin/Programs';
@@ -68,6 +69,7 @@ function AppRoutes() {
         <Route path="ai-coach" element={<AICoachPage />} />
         <Route path="courses" element={<CoursesPage />} />
         <Route path="courses/:id" element={<CourseDetailPage />} />
+        <Route path="courses/:id/modules/:moduleId/quiz" element={<ModuleQuizPage />} />
         <Route path="courses/:id/assessment" element={<CourseAssessmentPage />} />
         <Route path="courses/:id/certificate" element={<CourseCertificatePage />} />
         <Route path="forum" element={<ForumPage />} />

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { skillsApi } from '../../lib/api/skills';
 import { roadmapsApi, type RoadmapResponse } from '../../lib/api/roadmaps';
@@ -22,6 +23,7 @@ const SKILL_LEVELS = [
 
 export default function AIGrowthPlan() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
 
     // Form state
@@ -96,6 +98,27 @@ export default function AIGrowthPlan() {
         if (!week.items || week.items.length === 0) return 0;
         const done = week.items.filter(i => i.completed).length;
         return Math.round((done / week.items.length) * 100);
+    };
+
+    const splitPracticeItems = (practice: string[]) => {
+        const tests: Array<{ task: string; index: number }> = [];
+        const required: Array<{ task: string; index: number }> = [];
+        const regular: Array<{ task: string; index: number }> = [];
+
+        (practice || []).forEach((task, index) => {
+            const upper = task.trim().toUpperCase();
+            if (upper.startsWith('TEST:')) {
+                tests.push({ task, index });
+                return;
+            }
+            if (upper.startsWith('BUILD:') || upper.startsWith('REVIEW:') || upper.startsWith('REQUIRED:')) {
+                required.push({ task, index });
+                return;
+            }
+            regular.push({ task, index });
+        });
+
+        return { tests, required, regular };
     };
 
     // ─── Loading State ──────────────────────────────────────────
@@ -269,33 +292,67 @@ export default function AIGrowthPlan() {
                                             {/* Practice */}
                                             <div className="space-y-3">
                                                 <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <Activity className="h-3 w-3" /> Practice
+                                                    <Activity className="h-3 w-3" /> Practice + Required
                                                 </h5>
-                                                <div className="space-y-2">
-                                                    {week.practice.map((task, idx) => {
-                                                        const item = week.items?.find(i => i.item_type === 'practice' && i.item_index === idx);
-                                                        return (
-                                                            <div
-                                                                key={idx}
-                                                                className="flex items-start gap-2 p-2 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors group"
-                                                                onClick={() => item && progressMutation.mutate({
-                                                                    roadmapId: latestRoadmap.id,
-                                                                    week: week.week,
-                                                                    item_type: 'practice',
-                                                                    item_index: idx,
-                                                                    completed: !item.completed,
-                                                                })}
-                                                            >
-                                                                <div className={cn(
-                                                                    "h-4 w-4 mt-0.5 rounded border flex items-center justify-center transition-all flex-shrink-0",
-                                                                    item?.completed ? "bg-emerald-500 border-emerald-500" : "border-gray-300 group-hover:border-emerald-400"
-                                                                )}>
-                                                                    {item?.completed && <CheckCircle2 className="h-3 w-3 text-white" />}
+                                                <div className="space-y-3">
+                                                    {(() => {
+                                                        const grouped = splitPracticeItems(week.practice);
+                                                        const renderPractice = (entry: { task: string; index: number }) => {
+                                                            const item = week.items?.find(i => i.item_type === 'practice' && i.item_index === entry.index);
+                                                            return (
+                                                                <div
+                                                                    key={entry.index}
+                                                                    className="flex items-start gap-2 p-2 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors group"
+                                                                    onClick={() => item && progressMutation.mutate({
+                                                                        roadmapId: latestRoadmap.id,
+                                                                        week: week.week,
+                                                                        item_type: 'practice',
+                                                                        item_index: entry.index,
+                                                                        completed: !item.completed,
+                                                                    })}
+                                                                >
+                                                                    <div className={cn(
+                                                                        "h-4 w-4 mt-0.5 rounded border flex items-center justify-center transition-all flex-shrink-0",
+                                                                        item?.completed ? "bg-emerald-500 border-emerald-500" : "border-gray-300 group-hover:border-emerald-400"
+                                                                    )}>
+                                                                        {item?.completed && <CheckCircle2 className="h-3 w-3 text-white" />}
+                                                                    </div>
+                                                                    <span className={cn("text-xs font-medium", item?.completed ? "text-gray-400 line-through" : "text-gray-700")}>{entry.task}</span>
                                                                 </div>
-                                                                <span className={cn("text-xs font-medium", item?.completed ? "text-gray-400 line-through" : "text-gray-700")}>{task}</span>
-                                                            </div>
+                                                            );
+                                                        };
+
+                                                        return (
+                                                            <>
+                                                                {grouped.tests.length > 0 && (
+                                                                    <div className="space-y-1">
+                                                                        <div className="text-[10px] font-bold uppercase tracking-wider text-violet-600">Practice Tests</div>
+                                                                        {grouped.tests.map(renderPractice)}
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            className="h-7 px-2 text-[10px] font-bold text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                                                                            onClick={() => navigate('/faculty/practice')}
+                                                                        >
+                                                                            Open AI Practice Tests
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                                {grouped.required.length > 0 && (
+                                                                    <div className="space-y-1">
+                                                                        <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Required Extras</div>
+                                                                        {grouped.required.map(renderPractice)}
+                                                                    </div>
+                                                                )}
+                                                                {grouped.regular.length > 0 && (
+                                                                    <div className="space-y-1">
+                                                                        {grouped.regular.map(renderPractice)}
+                                                                    </div>
+                                                                )}
+                                                            </>
                                                         );
-                                                    })}
+                                                    })()}
                                                 </div>
                                             </div>
                                         </div>

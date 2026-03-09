@@ -18,6 +18,57 @@ class AnalyticsService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @staticmethod
+    def _clip(text: Optional[str], limit: int = 180) -> Optional[str]:
+        if not text:
+            return None
+        normalized = " ".join(text.split())
+        if len(normalized) <= limit:
+            return normalized
+        return normalized[: limit - 1].rstrip() + "…"
+
+    def _build_ai_suggestion(
+        self,
+        profile: FacultyProfile,
+        latest_analysis: Optional[PerformanceAnalysis],
+        avg_accuracy: float,
+    ) -> tuple[str, str]:
+        if latest_analysis:
+            if latest_analysis.recommendations and len(latest_analysis.recommendations) > 0:
+                rec = self._clip(latest_analysis.recommendations[0])
+                if rec:
+                    return rec, "LLM_RECOMMENDATION"
+            if latest_analysis.skill_gaps and len(latest_analysis.skill_gaps) > 0:
+                gap = self._clip(latest_analysis.skill_gaps[0])
+                if gap:
+                    return f"Focus this week: {gap}", "LLM_SKILL_GAP"
+            weak = self._clip(latest_analysis.weaknesses)
+            if weak:
+                return weak, "LLM_WEAKNESS"
+
+        # Deterministic fallback when no completed analysis exists yet.
+        if len(profile.attempts) == 0:
+            return (
+                "No assessment data yet. Start one baseline test to unlock AI recommendations.",
+                "RULE_BASED",
+            )
+
+        dept = profile.department or "current domain"
+        if avg_accuracy < 50:
+            return (
+                f"Reinforce fundamentals in {dept}: complete 2 guided practice sets before the next test.",
+                "RULE_BASED",
+            )
+        if avg_accuracy < 70:
+            return (
+                f"Target medium-difficulty gaps in {dept} and schedule one timed mock test this week.",
+                "RULE_BASED",
+            )
+        return (
+            f"Performance is stable. Move to advanced {dept} tasks and maintain weekly assessment rhythm.",
+            "RULE_BASED",
+        )
+
     async def get_department_summary(self) -> List[DepartmentSummary]:
         result = await self.db.execute(
             select(FacultyProfile)
@@ -103,6 +154,17 @@ class AnalyticsService:
         progress = active_plan.progress_percentage if active_plan else 0.0
         
         verified_count = sum(1 for fs in p.skills if fs.status == "VERIFIED")
+        ai_suggestion, ai_source = self._build_ai_suggestion(
+            profile=p,
+            latest_analysis=latest_analysis,
+            avg_accuracy=avg_acc,
+        )
+        top_gap = None
+        if latest_analysis:
+            if latest_analysis.skill_gaps and len(latest_analysis.skill_gaps) > 0:
+                top_gap = self._clip(latest_analysis.skill_gaps[0], limit=120)
+            elif latest_analysis.weaknesses:
+                top_gap = self._clip(latest_analysis.weaknesses, limit=120)
         
         return FacultyAnalytics(
             faculty_id=p.id,
@@ -113,8 +175,10 @@ class AnalyticsService:
             total_enrollments=len(p.course_enrollments),
             avg_accuracy=avg_acc,
             active_plan_progress=progress,
-            top_gap=latest_analysis.weaknesses if latest_analysis else None,
+            top_gap=top_gap,
             strengths=latest_analysis.strengths if latest_analysis else None,
             weaknesses=latest_analysis.weaknesses if latest_analysis else None,
-            recommendations=latest_analysis.recommendations if latest_analysis else []
+            recommendations=latest_analysis.recommendations if latest_analysis else [],
+            ai_suggestion=ai_suggestion,
+            ai_source=ai_source,
         )

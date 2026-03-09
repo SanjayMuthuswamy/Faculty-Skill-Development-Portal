@@ -14,6 +14,42 @@ import { Plus, Edit2, Trash2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
 
+interface ProgramFormData {
+    title: string;
+    description: string;
+    domain: SkillDomain;
+    startDate: string;
+    endDate: string;
+    seats: number | string;
+    status: ProgramStatus;
+    mode?: string;
+    topics?: string;
+    benefits?: string;
+}
+
+function splitCsv(input?: string): string[] {
+    if (!input) return [];
+    return input
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean);
+}
+
+function getApiErrorMessage(error: any, fallback: string): string {
+    const detail = error?.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+        const normalized = detail.map((d: any) => {
+            if (typeof d === 'string') return d;
+            if (d?.loc && d?.msg) return `${d.loc.join('.')}: ${d.msg}`;
+            if (d?.msg) return d.msg;
+            return String(d);
+        });
+        return normalized.join(', ');
+    }
+    return fallback;
+}
+
 export default function AdminPrograms() {
     const { addToast } = useToast();
     const queryClient = useQueryClient();
@@ -25,7 +61,7 @@ export default function AdminPrograms() {
         queryFn: () => programsApi.listPrograms(),
     });
 
-    const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<any>();
+    const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<ProgramFormData>();
 
     const createMutation = useMutation({
         mutationFn: programsApi.createProgram,
@@ -36,12 +72,7 @@ export default function AdminPrograms() {
             reset();
         },
         onError: (error: any) => {
-            const detail = error.response?.data?.detail;
-            const message = typeof detail === 'string'
-                ? detail
-                : (Array.isArray(detail)
-                    ? detail.map((d: any) => `${d.loc.join('.')}: ${d.msg}`).join(', ')
-                    : 'Failed to create program');
+            const message = getApiErrorMessage(error, 'Failed to create program');
             addToast(message, 'error');
         }
     });
@@ -56,12 +87,7 @@ export default function AdminPrograms() {
             reset();
         },
         onError: (error: any) => {
-            const detail = error.response?.data?.detail;
-            const message = typeof detail === 'string'
-                ? detail
-                : (Array.isArray(detail)
-                    ? detail.map((d: any) => `${d.loc.join('.')}: ${d.msg}`).join(', ')
-                    : 'Failed to update program');
+            const message = getApiErrorMessage(error, 'Failed to update program');
             addToast(message, 'error');
         }
     });
@@ -74,7 +100,16 @@ export default function AdminPrograms() {
         },
     });
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (data: ProgramFormData) => {
+        const topics = splitCsv(data.topics);
+        const benefits = splitCsv(data.benefits);
+        const status = data.status || ProgramStatus.DRAFT;
+
+        if (status === ProgramStatus.PUBLISHED && topics.length === 0) {
+            addToast('Add at least one topic before publishing a program.', 'error');
+            return;
+        }
+
         const formattedData = {
             title: data.title,
             description: data.description,
@@ -82,7 +117,10 @@ export default function AdminPrograms() {
             start_date: data.startDate ? new Date(data.startDate).toISOString() : undefined,
             end_date: data.endDate ? new Date(data.endDate).toISOString() : undefined,
             seats: Number(data.seats) || 30,
-            status: data.status || ProgramStatus.DRAFT
+            mode: data.mode || 'Online',
+            topics,
+            benefits,
+            status
         };
 
         if (editingProgram) {
@@ -101,6 +139,9 @@ export default function AdminPrograms() {
         setValue('endDate', program.end_date ? format(new Date(program.end_date), 'yyyy-MM-dd') : '');
         setValue('seats', program.seats);
         setValue('status', program.status);
+        setValue('mode', program.mode || 'Online');
+        setValue('topics', Array.isArray(program.topics) ? program.topics.join(', ') : '');
+        setValue('benefits', Array.isArray(program.benefits) ? program.benefits.join(', ') : '');
         setIsModalOpen(true);
     };
 
@@ -234,12 +275,39 @@ export default function AdminPrograms() {
                     </div>
 
                     <div className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">Mode</label>
+                        <select className="w-full h-10 rounded-md border border-gray-300 px-3" {...register('mode')}>
+                            <option value="Online">Online</option>
+                            <option value="Offline">Offline</option>
+                            <option value="Hybrid">Hybrid</option>
+                        </select>
+                    </div>
+
+                    <div className="space-y-1">
                         <label className="text-sm font-medium text-gray-700">Status</label>
                         <select className="w-full h-10 rounded-md border border-gray-300 px-3" {...register('status')}>
                             {Object.values(ProgramStatus).map(status => (
                                 <option key={status} value={status}>{status}</option>
                             ))}
                         </select>
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">Topics (comma separated)</label>
+                        <textarea
+                            className="flex min-h-[72px] w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            placeholder="e.g. Prompt Engineering, LLM Evaluation, API Integration"
+                            {...register('topics')}
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">Benefits (comma separated)</label>
+                        <textarea
+                            className="flex min-h-[72px] w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            placeholder="e.g. Certificate, Hands-on labs, Mentorship"
+                            {...register('benefits')}
+                        />
                     </div>
 
 

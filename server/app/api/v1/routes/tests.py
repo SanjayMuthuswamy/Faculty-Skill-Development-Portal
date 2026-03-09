@@ -4,7 +4,7 @@ from typing import List
 
 from app.api.v1.deps import get_current_user, get_session, require_role
 from app.models.user import User, UserRole
-from app.schemas.test import Test as TestSchema, TestCreate
+from app.schemas.test import Test as TestSchema, TestCreate, TestUpdate
 from app.services.test_service import TestService
 
 router = APIRouter(tags=["tests"])
@@ -43,12 +43,12 @@ async def get_test(
 @router.patch("/{test_id}", response_model=TestSchema)
 async def update_test(
     test_id: str,
-    test_in: dict,
+    test_in: TestUpdate,
     current_user: User = Depends(require_role(UserRole.ADMIN)),
     db: AsyncSession = Depends(get_session)
 ):
     service = TestService(db)
-    updated = await service.update_test(test_id, test_in)
+    updated = await service.update_test(test_id, test_in.model_dump(exclude_none=True))
     if not updated:
         raise HTTPException(status_code=404, detail="Test not found")
     return updated

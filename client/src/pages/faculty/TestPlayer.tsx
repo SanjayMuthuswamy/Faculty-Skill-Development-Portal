@@ -20,6 +20,7 @@ export default function TestPlayer() {
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(0);
     const [attemptId, setAttemptId] = useState<string | null>(null);
+    const [attemptInitError, setAttemptInitError] = useState<string | null>(null);
     const attemptStarted = useRef(false);
 
     const { data: test, isLoading: isLoadingTest } = useQuery({
@@ -30,26 +31,42 @@ export default function TestPlayer() {
 
     const testQuestions = test?.questions || [];
 
-    // Initialize timer
+    // Reset attempt setup state when test changes.
     useEffect(() => {
-        if (test && timeLeft === 0) {
+        attemptStarted.current = false;
+        setAttemptId(null);
+        setAttemptInitError(null);
+        setTimeLeft(0);
+        setCurrentQuestionIndex(0);
+        setAnswers({});
+        setMarkedForReview(new Set());
+    }, [id, user?.id]);
+
+    // Initialize timer after attempt starts.
+    useEffect(() => {
+        if (test && attemptId && timeLeft === 0) {
             setTimeLeft(test.time_limit_minutes * 60);
         }
-    }, [test]);
+    }, [test, attemptId, timeLeft]);
 
-    // Create the attempt
-    useEffect(() => {
+    const initializeAttempt = useCallback(() => {
         if (!id || !user || attemptStarted.current) return;
         attemptStarted.current = true;
+        setAttemptInitError(null);
 
         attemptsApi.createAttempt({ test_id: id })
             .then(res => setAttemptId(res.id))
             .catch((err) => {
                 const detail = err?.response?.data?.detail || 'Failed to start test attempt';
+                setAttemptInitError(detail);
                 addToast(detail, 'error');
-                navigate('/faculty/tests');
             });
-    }, [id, user]);
+    }, [id, user, addToast]);
+
+    // Create the attempt
+    useEffect(() => {
+        initializeAttempt();
+    }, [initializeAttempt]);
 
     const submitMutation = useMutation({
         mutationFn: (data: { answers: { question_id: string; selected_option: string }[] }) =>
@@ -106,6 +123,38 @@ export default function TestPlayer() {
             <div className="p-8 text-center">
                 <h1 className="text-xl font-bold">Test not found or has no questions.</h1>
                 <Button onClick={() => navigate('/faculty/tests')} className="mt-4">Back to Tests</Button>
+            </div>
+        );
+    }
+
+    if (!attemptId) {
+        return (
+            <div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center p-6">
+                <div className="max-w-lg w-full text-center border border-slate-200 rounded-2xl p-8 bg-white shadow-sm space-y-4">
+                    {attemptInitError ? (
+                        <>
+                            <h2 className="text-xl font-bold text-slate-900">Could not start this test</h2>
+                            <p className="text-sm text-slate-600">{attemptInitError}</p>
+                            <div className="flex justify-center gap-3">
+                                <Button variant="outline" onClick={() => navigate('/faculty/tests')}>Back to Tests</Button>
+                                <Button
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                    onClick={() => {
+                                        attemptStarted.current = false;
+                                        initializeAttempt();
+                                    }}
+                                >
+                                    Retry
+                                </Button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+                            <p className="text-slate-500 font-medium">Starting your test attempt...</p>
+                        </>
+                    )}
+                </div>
             </div>
         );
     }
@@ -176,7 +225,7 @@ export default function TestPlayer() {
                         variant="default"
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-8 rounded-xl shadow-lg shadow-emerald-600/20 h-11"
                         onClick={handleSubmit}
-                        disabled={submitMutation.isPending}
+                        disabled={!attemptId || submitMutation.isPending}
                     >
                         {submitMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                         Submit Test

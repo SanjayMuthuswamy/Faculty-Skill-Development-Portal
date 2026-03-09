@@ -24,10 +24,13 @@ export interface Test {
     created_by_id: string;
     created_at: string;
     questions?: Question[];
+    pack_ids?: string[];
+    question_ids?: string[];
 }
 
 export interface TestCreate {
     title: string;
+    description?: string;
     domain: SkillDomain;
     difficulty?: Difficulty;
     pass_marks?: number;

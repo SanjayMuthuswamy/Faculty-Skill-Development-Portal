@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.skill import SkillDomain
 from app.models.faculty_skill import SkillStatus
@@ -25,16 +25,16 @@ class Skill(SkillBase):
 
 # Faculty Skill Schemas
 class FacultySkillBase(BaseModel):
-    level: int = 1
+    level: int = Field(default=1, ge=1, le=5)
     status: SkillStatus = SkillStatus.UNVERIFIED
 
 class FacultySkillCreate(BaseModel):
     skill_name: str # Allow creating link by name
     domain: SkillDomain
-    level: int = 1
+    level: int = Field(default=1, ge=1, le=5)
 
 class FacultySkillUpdate(BaseModel):
-    level: Optional[int] = None
+    level: Optional[int] = Field(default=None, ge=1, le=5)
     status: Optional[SkillStatus] = None
 
 class FacultySkill(FacultySkillBase):

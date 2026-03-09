@@ -19,6 +19,74 @@ class CourseService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    def _build_default_quiz_payloads(self, module: CourseModule) -> List[Dict[str, Any]]:
+        """Generate fallback quiz questions when a module has no authored quiz."""
+        title = (module.title or "This module").strip()
+        takeaways = [
+            t.strip()
+            for t in (module.key_takeaways or [])
+            if isinstance(t, str) and t.strip()
+        ]
+        if not takeaways:
+            if module.description and module.description.strip():
+                takeaways = [module.description.strip()]
+            else:
+                takeaways = [f"{title} introduces core concepts and practical usage."]
+
+        primary_takeaway = takeaways[0]
+
+        return [
+            {
+                "question_text": f"What is the primary focus of the module '{title}'?",
+                "options": {
+                    "A": "General campus administration updates",
+                    "B": title,
+                    "C": "Unrelated historical timelines",
+                    "D": "Department budget planning",
+                },
+                "correct_answer": "B",
+                "explanation": f"This module is specifically focused on '{title}'.",
+            },
+            {
+                "question_text": f"Which statement is a key takeaway from '{title}'?",
+                "options": {
+                    "A": primary_takeaway,
+                    "B": "The module excludes practical application and examples.",
+                    "C": "No foundational concepts are covered in this lesson.",
+                    "D": "Assessments are skipped for this learning path.",
+                },
+                "correct_answer": "A",
+                "explanation": "This option matches one of the listed module takeaways.",
+            },
+            {
+                "question_text": "What is required to clear a module and unlock the next one?",
+                "options": {
+                    "A": "Skip the quiz and continue directly",
+                    "B": "Pass the module quiz with at least 60%",
+                    "C": "Complete only the final assessment",
+                    "D": "Request manual approval from admin",
+                },
+                "correct_answer": "B",
+                "explanation": "Course progression requires passing each module quiz with 60% or higher.",
+            },
+        ]
+
+    async def _create_default_quiz_for_module(self, module: CourseModule) -> None:
+        for payload in self._build_default_quiz_payloads(module):
+            self.db.add(ModuleQuiz(module_id=module.id, **payload))
+
+    async def _ensure_quizzes_for_course_modules(self, modules: List[CourseModule]) -> bool:
+        created = False
+        for module in modules:
+            if module.quiz_questions:
+                continue
+            await self._create_default_quiz_for_module(module)
+            created = True
+
+        if created:
+            await self.db.commit()
+        return created
+
     # ── Courses ──────────────────────────────────────────────────────────────
 
     async def get_courses(self, published_only: bool = True) -> List[Course]:
@@ -37,7 +105,24 @@ class CourseService:
                 selectinload(Course.assessment_questions)
             )
         )
-        return result.scalar_one_or_none()
+        course = result.scalar_one_or_none()
+        if not course:
+            return None
+
+        # Backfill missing module quizzes so all modules have quiz access.
+        created = await self._ensure_quizzes_for_course_modules(course.modules)
+        if not created:
+            return course
+
+        refreshed = await self.db.execute(
+            select(Course)
+            .where(Course.id == course_id)
+            .options(
+                selectinload(Course.modules).selectinload(CourseModule.quiz_questions),
+                selectinload(Course.assessment_questions)
+            )
+        )
+        return refreshed.scalar_one_or_none()
 
     async def create_course(self, data: dict, creator_id: str) -> Course:
         course = Course(**data, created_by_id=creator_id)
@@ -63,9 +148,11 @@ class CourseService:
     async def add_module(self, course_id: str, data: dict) -> CourseModule:
         module = CourseModule(**data, course_id=course_id)
         self.db.add(module)
+        await self.db.flush()
+        await self._create_default_quiz_for_module(module)
         await self.db.commit()
-        await self.db.refresh(module)
-        return module
+        refreshed = await self.get_module(module.id)
+        return refreshed if refreshed else module
 
     async def get_module(self, module_id: str) -> Optional[CourseModule]:
         result = await self.db.execute(
@@ -131,14 +218,26 @@ class CourseService:
         enrollment = CourseEnrollment(faculty_id=faculty_id, course_id=course_id)
         self.db.add(enrollment)
         await self.db.commit()
-        await self.db.refresh(enrollment)
-        return enrollment
+        result = await self.db.execute(
+            select(CourseEnrollment)
+            .where(CourseEnrollment.id == enrollment.id)
+            .options(
+                selectinload(CourseEnrollment.course)
+                .selectinload(Course.modules)
+                .selectinload(CourseModule.quiz_questions)
+            )
+        )
+        return result.scalar_one()
 
     async def get_my_enrollments(self, faculty_id: str) -> List[CourseEnrollment]:
         result = await self.db.execute(
             select(CourseEnrollment)
             .where(CourseEnrollment.faculty_id == faculty_id)
-            .options(selectinload(CourseEnrollment.course))
+            .options(
+                selectinload(CourseEnrollment.course)
+                .selectinload(Course.modules)
+                .selectinload(CourseModule.quiz_questions)
+            )
         )
         return result.scalars().all()
 
@@ -172,6 +271,17 @@ class CourseService:
         )
         questions = result.scalars().all()
 
+        # Safety backfill for legacy modules with zero quiz rows.
+        if not questions:
+            module = await self.get_module(module_id)
+            if module:
+                await self._create_default_quiz_for_module(module)
+                await self.db.commit()
+                refreshed = await self.db.execute(
+                    select(ModuleQuiz).where(ModuleQuiz.module_id == module_id)
+                )
+                questions = refreshed.scalars().all()
+
         correct = sum(1 for q in questions if answers.get(q.id) == q.correct_answer)
         score = (correct / len(questions) * 100) if questions else 0
 
@@ -200,9 +310,21 @@ class CourseService:
             .where(LessonProgress.faculty_id == faculty_id, LessonProgress.module_id.in_(module_ids))
         )
         progresses = result.scalars().all()
+        progress_map = {p.module_id: p for p in progresses}
         completed = sum(1 for p in progresses if p.completed)
         quiz_scores = [p.quiz_score for p in progresses if p.quiz_score is not None]
         avg_quiz = sum(quiz_scores) / len(quiz_scores) if quiz_scores else None
+        module_progress = []
+        for module in course.modules:
+            p = progress_map.get(module.id)
+            module_progress.append(
+                {
+                    "module_id": module.id,
+                    "completed": bool(p.completed) if p else False,
+                    "quiz_score": round(p.quiz_score, 1) if p and p.quiz_score is not None else None,
+                    "quiz_passed": bool(p.quiz_passed) if p else False,
+                }
+            )
 
         return {
             "total_modules": total_modules,
@@ -210,7 +332,48 @@ class CourseService:
             "progress_pct": round(completed / total_modules * 100, 1),
             "avg_quiz_score": round(avg_quiz, 1) if avg_quiz is not None else None,
             "all_done": completed == total_modules,
+            "module_progress": module_progress,
         }
+
+    async def get_assessment_questions(self, course_id: str) -> List[Dict[str, Any]]:
+        """Return assessment question set; fallback to module quiz questions when needed."""
+        result = await self.db.execute(
+            select(CourseAssessmentQuestion).where(CourseAssessmentQuestion.course_id == course_id)
+        )
+        assessment_questions = result.scalars().all()
+        if assessment_questions:
+            return [
+                {
+                    "id": q.id,
+                    "course_id": q.course_id,
+                    "question_text": q.question_text,
+                    "options": q.options,
+                    "correct_answer": q.correct_answer,
+                }
+                for q in assessment_questions
+            ]
+
+        module_ids_res = await self.db.execute(
+            select(CourseModule.id).where(CourseModule.course_id == course_id)
+        )
+        module_ids = module_ids_res.scalars().all()
+        if not module_ids:
+            return []
+
+        quiz_res = await self.db.execute(
+            select(ModuleQuiz).where(ModuleQuiz.module_id.in_(module_ids))
+        )
+        module_quiz_questions = quiz_res.scalars().all()
+        return [
+            {
+                "id": q.id,
+                "course_id": course_id,
+                "question_text": q.question_text,
+                "options": q.options,
+                "correct_answer": q.correct_answer,
+            }
+            for q in module_quiz_questions
+        ]
 
     # ── Assessment ────────────────────────────────────────────────────────────
 
@@ -222,21 +385,18 @@ class CourseService:
         time_taken_seconds: int,
         pass_percent: float = 60.0
     ) -> CourseAttempt:
-        import random
-        result = await self.db.execute(
-            select(CourseAssessmentQuestion).where(CourseAssessmentQuestion.course_id == course_id)
-        )
-        questions = result.scalars().all()
+        question_bank = await self.get_assessment_questions(course_id)
 
-        correct_ids = []
+        correct_ids: list[str] = []
         wrong_questions = []
-        for q in questions:
-            if answers.get(q.id) == q.correct_answer:
-                correct_ids.append(q.id)
+        for q in question_bank:
+            q_id = str(q["id"])
+            if answers.get(q_id) == q["correct_answer"]:
+                correct_ids.append(q_id)
             else:
-                wrong_questions.append(q.question_text)
+                wrong_questions.append(q["question_text"])
 
-        total = len(questions)
+        total = len(question_bank)
         correct = len(correct_ids)
         score = (correct / total * 100) if total else 0
 

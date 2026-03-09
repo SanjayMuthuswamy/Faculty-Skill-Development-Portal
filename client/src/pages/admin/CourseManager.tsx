@@ -49,15 +49,28 @@ export default function CourseManagerPage() {
         queryKey: ['admin-courses'],
         queryFn: () => coursesApi.listCourses(),
     });
+    const { data: expandedCourseDetails, isFetching: isFetchingExpandedCourse } = useQuery({
+        queryKey: ['admin-course-details', expandedCourse],
+        queryFn: () => coursesApi.getCourse(expandedCourse as string),
+        enabled: !!expandedCourse,
+    });
 
     const createCourseMutation = useMutation({
         mutationFn: (data: any) => coursesApi.createCourse(data),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-courses'] }); setModal({ mode: null }); },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            setModal({ mode: null });
+        },
     });
 
     const updateCourseMutation = useMutation({
         mutationFn: ({ id, data }: any) => coursesApi.updateCourse(id, data),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-courses'] }); setModal({ mode: null }); },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            setModal({ mode: null });
+        },
     });
 
     const deleteCourseMutation = useMutation({
@@ -67,22 +80,37 @@ export default function CourseManagerPage() {
 
     const addModuleMutation = useMutation({
         mutationFn: ({ courseId, data }: any) => coursesApi.addModule(courseId, data),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-courses'] }); setModal({ mode: null }); },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            setModal({ mode: null });
+        },
     });
 
     const deleteModuleMutation = useMutation({
         mutationFn: ({ courseId, moduleId }: any) => coursesApi.deleteModule(courseId, moduleId),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-courses'] }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+        },
     });
 
     const addQuizMutation = useMutation({
         mutationFn: ({ courseId, moduleId, data }: any) => coursesApi.addQuizQuestion(courseId, moduleId, data),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-courses'] }); setModal({ mode: null }); },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            setModal({ mode: null });
+        },
     });
 
     const addAssessmentMutation = useMutation({
         mutationFn: ({ courseId, data }: any) => coursesApi.addAssessmentQuestion(courseId, data),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-courses'] }); setModal({ mode: null }); },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            setModal({ mode: null });
+        },
     });
 
     const openModal = (mode: ModalMode, partial?: Partial<ModalState>, initial?: Record<string, any>) => {
@@ -90,10 +118,42 @@ export default function CourseManagerPage() {
         setModal({ mode, ...partial });
     };
 
+    const normalizeTags = (rawTags: unknown): string[] => {
+        if (Array.isArray(rawTags)) {
+            return rawTags.map((tag) => String(tag).trim()).filter(Boolean);
+        }
+        if (typeof rawTags === 'string') {
+            return rawTags.split(',').map((tag) => tag.trim()).filter(Boolean);
+        }
+        return [];
+    };
+
+    const normalizeDuration = (rawDuration: unknown): number | undefined => {
+        if (rawDuration === '' || rawDuration === null || rawDuration === undefined) return undefined;
+        const parsed = Number(rawDuration);
+        return Number.isFinite(parsed) ? parsed : undefined;
+    };
+
+    const buildCoursePayload = () => {
+        const payload: Record<string, any> = {
+            title: (form.title || '').trim(),
+            description: form.description || undefined,
+            instructor_name: form.instructor_name || '',
+            duration_hours: normalizeDuration(form.duration_hours),
+            skill_level: form.skill_level || 'beginner',
+            tags: normalizeTags(form.tags),
+            thumbnail_url: form.thumbnail_url || undefined,
+            is_published: !!form.is_published,
+        };
+        if (payload.duration_hours === undefined) delete payload.duration_hours;
+        return payload;
+    };
+
     const handleSubmit = () => {
         if (modal.mode === 'course') {
-            if (form.id) updateCourseMutation.mutate({ id: form.id, data: form });
-            else createCourseMutation.mutate({ ...form, tags: (form.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean) });
+            const payload = buildCoursePayload();
+            if (form.id) updateCourseMutation.mutate({ id: form.id, data: payload });
+            else createCourseMutation.mutate(payload);
         } else if (modal.mode === 'module' && modal.courseId) {
             addModuleMutation.mutate({
                 courseId: modal.courseId,
@@ -139,6 +199,8 @@ export default function CourseManagerPage() {
             <div className="space-y-3">
                 {courses.map((course: Course) => {
                     const isOpen = expandedCourse === course.id;
+                    const modules = isOpen && expandedCourseDetails?.id === course.id ? expandedCourseDetails.modules : [];
+                    const showModuleLoader = isOpen && isFetchingExpandedCourse && expandedCourseDetails?.id !== course.id;
                     return (
                         <div key={course.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                             {/* Course Row */}
@@ -182,7 +244,12 @@ export default function CourseManagerPage() {
                                             <button onClick={() => openModal('module', { courseId: course.id })} className="text-xs px-3 py-1.5 bg-blue-100 text-blue-700 font-semibold rounded-lg hover:bg-blue-200 transition-colors">+ Module</button>
                                         </div>
                                     </div>
-                                    {(course as any).modules?.map((mod: CourseModule) => (
+                                    {showModuleLoader && (
+                                        <div className="flex justify-center py-4">
+                                            <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                                        </div>
+                                    )}
+                                    {modules.map((mod: CourseModule) => (
                                         <div key={mod.id} className="bg-slate-50 rounded-xl px-4 py-3 flex items-center justify-between">
                                             <div>
                                                 <p className="text-sm font-semibold text-slate-700">{mod.title}</p>
@@ -197,7 +264,7 @@ export default function CourseManagerPage() {
                                             </div>
                                         </div>
                                     ))}
-                                    {!(course as any).modules?.length && (
+                                    {!showModuleLoader && !modules.length && (
                                         <p className="text-xs text-slate-400 text-center py-3">No modules yet. Add one above.</p>
                                     )}
                                 </div>
@@ -223,7 +290,7 @@ export default function CourseManagerPage() {
                             <FieldGroup label="Description"><textarea className={inputCls} rows={3} value={form.description || ''} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Course description" /></FieldGroup>
                             <div className="grid grid-cols-2 gap-3">
                                 <FieldGroup label="Instructor"><input className={inputCls} value={form.instructor_name || ''} onChange={e => setForm(p => ({ ...p, instructor_name: e.target.value }))} placeholder="Instructor name" /></FieldGroup>
-                                <FieldGroup label="Duration (hours)"><input type="number" className={inputCls} value={form.duration_hours || ''} onChange={e => setForm(p => ({ ...p, duration_hours: parseFloat(e.target.value) }))} placeholder="1.5" /></FieldGroup>
+                                <FieldGroup label="Duration (hours)"><input type="number" className={inputCls} value={form.duration_hours ?? ''} onChange={e => setForm(p => ({ ...p, duration_hours: e.target.value }))} placeholder="1.5" /></FieldGroup>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <FieldGroup label="Skill Level">

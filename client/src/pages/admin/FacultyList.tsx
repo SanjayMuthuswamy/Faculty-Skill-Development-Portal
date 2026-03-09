@@ -17,7 +17,8 @@ import {
     BrainCircuit,
     Activity,
     Filter,
-    BookOpen
+    BookOpen,
+    Sparkles
 } from 'lucide-react';
 
 export function FacultyList() {
@@ -68,7 +69,7 @@ export function FacultyList() {
         createMutation.mutate(newFaculty);
     };
 
-    const { data: facultyList, isLoading: loadingList } = useQuery({
+    const { data: facultyList, isLoading: loadingList, error: listError } = useQuery({
         queryKey: ['admin', 'faculty', 'list'],
         queryFn: () => facultyApi.listProfiles(),
     });
@@ -86,7 +87,7 @@ export function FacultyList() {
         return { progress: avgProgress, verified: totalVerified, attention: attentionNeeded };
     }, [departmentSummary]);
 
-    const filteredFaculty = facultyList?.filter(f => {
+    const filteredFaculty = (facultyList ?? []).filter(f => {
         const matchesSearch = (f.user?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (f.user?.email || '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesDept = deptFilter === 'All' || f.department === deptFilter;
@@ -188,25 +189,27 @@ export function FacultyList() {
             <Card className="border-none shadow-xl bg-white overflow-hidden">
                 <CardContent className="p-0">
                     <Table>
-                        <TableHeader className="bg-gray-50/50">
+                        <TableHeader className="bg-slate-50/80">
                             <TableRow>
                                 <TableHead className="pl-6 py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Faculty Details</TableHead>
                                 <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Enrollments</TableHead>
                                 <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Active Plan</TableHead>
                                 <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Accuracy</TableHead>
                                 <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Attempts</TableHead>
-                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">AI Insights</TableHead>
+                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">AI Recommendation</TableHead>
                                 <TableHead className="text-right pr-6 py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Action</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredFaculty?.map((faculty) => (
+                            {filteredFaculty.map((faculty) => (
                                 <FacultyRow key={faculty.id} faculty={faculty} onView={() => navigate(`/admin/faculty/${faculty.id}`)} />
                             ))}
-                            {filteredFaculty?.length === 0 && (
+                            {filteredFaculty.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={8} className="h-32 text-center text-gray-500 font-bold italic">
-                                        No faculty members found matching your criteria.
+                                        {listError
+                                            ? 'Failed to load faculty list from server. Please refresh or re-login.'
+                                            : 'No faculty members found matching your criteria.'}
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -318,22 +321,48 @@ export function FacultyList() {
     );
 }
 
+function clampText(input: string, max: number): string {
+    const text = (input || '').trim();
+    if (text.length <= max) return text;
+    return `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+function getAccuracyTone(accuracy: number): string {
+    if (accuracy >= 80) return 'text-emerald-600';
+    if (accuracy >= 60) return 'text-blue-600';
+    return 'text-amber-600';
+}
+
 function FacultyRow({ faculty, onView }: { faculty: any, onView: () => void }) {
-    const { data: summary } = useQuery({
+    const { data: summary, isLoading: loadingSummary } = useQuery({
         queryKey: ['admin', 'faculty', 'analytics', faculty.id],
         queryFn: () => analyticsApi.getFacultyAnalytics(faculty.id),
+        staleTime: 60_000,
+        refetchOnWindowFocus: false,
     });
 
+    const accuracy = Math.round(summary?.avg_accuracy || 0);
+    const aiSuggestion = summary?.ai_suggestion
+        || summary?.recommendations?.[0]
+        || summary?.top_gap
+        || '';
+    const aiText = aiSuggestion
+        ? clampText(aiSuggestion, 110)
+        : (loadingSummary ? 'Generating insight...' : 'No AI suggestion available yet');
+    const aiSource = summary?.ai_source || (summary?.recommendations?.length ? 'LLM_RECOMMENDATION' : 'RULE_BASED');
+    const sourceLabel = aiSource.replace(/_/g, ' ');
+
     return (
-        <TableRow className="group hover:bg-slate-50/80 transition-all border-b border-gray-100 last:border-0">
+        <TableRow className="group hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
             <TableCell className="pl-6 py-5">
                 <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                    <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-md">
                         {faculty.user?.name?.charAt(0) || 'F'}
                     </div>
                     <div className="flex flex-col">
                         <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors leading-none mb-1">{faculty.user?.name || 'Unknown'}</span>
-                        <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400 uppercase tracking-tight">
+                        <div className="text-[11px] text-slate-500 font-medium mb-1">{faculty.user?.email || 'No email'}</div>
+                        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-tight">
                             <span>{faculty.department}</span>
                             <span className="w-1 h-1 rounded-full bg-slate-300" />
                             <span>{faculty.designation}</span>
@@ -344,7 +373,7 @@ function FacultyRow({ faculty, onView }: { faculty: any, onView: () => void }) {
             <TableCell className="py-5 text-center">
                 <div className="inline-flex flex-col items-center">
                     <span className="text-sm font-bold text-slate-700">{faculty.course_enrollments?.length || 0}</span>
-                    <Badge className="bg-emerald-50 text-emerald-600 border-none text-[8px] font-semibold uppercase tracking-tighter h-4 gap-1">
+                    <Badge className="bg-emerald-50 text-emerald-700 border-none text-[8px] font-bold uppercase tracking-tighter h-4 gap-1">
                         <BookOpen className="h-2 w-2" /> Courses
                     </Badge>
                 </div>
@@ -353,9 +382,9 @@ function FacultyRow({ faculty, onView }: { faculty: any, onView: () => void }) {
                 {summary ? (
                     <div className="flex flex-col gap-1.5 min-w-[140px] px-2 text-center">
                         <span className="text-blue-600 font-black text-[10px]">{Math.round(summary.active_plan_progress)}%</span>
-                        <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
                             <div
-                                className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000 ease-out"
+                                className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-700 ease-out"
                                 style={{ width: `${summary.active_plan_progress}%` }}
                             />
                         </div>
@@ -368,24 +397,29 @@ function FacultyRow({ faculty, onView }: { faculty: any, onView: () => void }) {
             </TableCell>
             <TableCell className="py-5 text-center">
                 <div className="flex flex-col items-center">
-                    <span className={`text-sm font-bold ${summary && summary.avg_accuracy >= 80 ? 'text-emerald-500' : summary && summary.avg_accuracy >= 60 ? 'text-blue-500' : 'text-amber-500'}`}>
-                        {Math.round(summary?.avg_accuracy || 0)}%
+                    <span className={`text-sm font-black ${getAccuracyTone(accuracy)}`}>
+                        {accuracy}%
                     </span>
-                    <Badge className="bg-slate-50 text-slate-400 border-none text-[8px] font-semibold uppercase tracking-tighter h-4">Avg Score</Badge>
+                    <Badge className="bg-slate-50 text-slate-500 border-none text-[8px] font-bold uppercase tracking-tighter h-4">Avg Score</Badge>
                 </div>
             </TableCell>
             <TableCell className="py-5 text-center">
                 <div className="inline-flex flex-col items-center">
-                    <span className="text-sm font-bold text-slate-700">{summary?.attempts_count || 0}</span>
-                    <Badge className="bg-blue-50 text-blue-500 border-none text-[8px] font-semibold uppercase tracking-tighter h-4">Tests</Badge>
+                    <span className="text-sm font-black text-slate-700">{summary?.attempts_count || 0}</span>
+                    <Badge className="bg-blue-50 text-blue-600 border-none text-[8px] font-bold uppercase tracking-tighter h-4">Tests</Badge>
                 </div>
             </TableCell>
             <TableCell className="py-5">
-                <div className="flex flex-col gap-1">
-                    <div className={`text-[10px] font-semibold leading-tight truncate max-w-[140px] px-2 py-1 rounded-lg w-fit ${summary?.top_gap ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-400 italic'}`}>
-                        {summary?.top_gap || 'Analyzing...'}
+                <div className="flex flex-col gap-1.5 max-w-[300px]">
+                    <div className={`text-[11px] leading-snug px-2.5 py-1.5 rounded-lg border ${aiSuggestion ? 'bg-amber-50 border-amber-100 text-amber-800 font-semibold' : 'bg-slate-50 border-slate-100 text-slate-400 italic'}`}>
+                        {aiText}
                     </div>
-                    <span className="text-[8px] text-slate-400 uppercase font-medium tracking-widest pl-1">AI Recommendation</span>
+                    <div className="flex items-center gap-1.5">
+                        <Badge className="bg-indigo-50 text-indigo-600 border-none text-[8px] font-black uppercase tracking-widest h-4">
+                            <Sparkles className="h-2 w-2" /> {sourceLabel}
+                        </Badge>
+                        <span className="text-[8px] text-slate-400 uppercase font-semibold tracking-widest">Backend Insight</span>
+                    </div>
                 </div>
             </TableCell>
             <TableCell className="text-right pr-6 py-5">
@@ -393,7 +427,7 @@ function FacultyRow({ faculty, onView }: { faculty: any, onView: () => void }) {
                     variant="ghost"
                     size="sm"
                     onClick={onView}
-                    className="h-9 w-9 rounded-xl font-bold flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-90 group/btn"
+                    className="h-9 w-9 rounded-xl font-bold flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95 group/btn"
                 >
                     <ExternalLink className="h-4 w-4 group-hover/btn:scale-110 transition-transform" />
                 </Button>

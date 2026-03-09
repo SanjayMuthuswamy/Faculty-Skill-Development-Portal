@@ -16,7 +16,7 @@ from app.schemas.course import (
     ModuleQuizCreate, ModuleQuizOut,
     AssessmentQuestionCreate, AssessmentQuestionOut,
     CourseEnrollmentOut, LessonProgressUpdate, LessonProgressOut,
-    QuizSubmit, AssessmentSubmit, CourseAttemptOut, CourseAnalyticsOut
+    QuizSubmit, AssessmentSubmit, CourseAttemptOut, CourseAnalyticsOut, CourseProgressOut
 )
 
 router = APIRouter()
@@ -218,13 +218,16 @@ async def enroll_in_course(
     return await svc.enroll(current_user.id, course_id)
 
 
-@router.get("/{course_id}/progress")
+@router.get("/{course_id}/progress", response_model=CourseProgressOut)
 async def get_progress(
     course_id: str,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
     svc = CourseService(db)
+    course = await svc.get_course(course_id)
+    if not course:
+        raise HTTPException(404, "Course not found")
     return await svc.get_course_progress(current_user.id, course_id)
 
 
@@ -262,15 +265,21 @@ async def get_assessment(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Return shuffled assessment questions WITHOUT correct answers."""
-    from sqlalchemy.future import select
-    from app.models.course_assessment import CourseAssessmentQuestion
-    result = await db.execute(
-        select(CourseAssessmentQuestion).where(CourseAssessmentQuestion.course_id == course_id)
-    )
-    questions = list(result.scalars().all())
+    """Return assessment questions WITHOUT correct answers.
+    Falls back to module quiz questions (video-topic based) when no final bank exists.
+    """
+    svc = CourseService(db)
+    questions = await svc.get_assessment_questions(course_id)
     random.shuffle(questions)
-    return questions
+    return [
+        {
+            "id": q["id"],
+            "course_id": q["course_id"],
+            "question_text": q["question_text"],
+            "options": q["options"],
+        }
+        for q in questions
+    ]
 
 
 @router.post("/{course_id}/assessment", response_model=CourseAttemptOut)

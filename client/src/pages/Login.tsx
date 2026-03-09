@@ -8,8 +8,8 @@ import { useToast } from '../components/ui/Toast';
 import { Eye, EyeOff, GraduationCap, ShieldCheck, Sparkles, Lock, User as UserIcon } from 'lucide-react';
 
 const CREDENTIALS = {
-    admin: { email: 'ms@email.com', password: '123456' },
-    faculty: { email: 'san@gmail.com', password: '1234567' },
+    admin: { email: 'sanjay@fsdp.com', password: '123456' },
+    faculty: { email: 'faculty@fsdp.com', password: '123456' },
 };
 
 const loginSchema = z.object({
@@ -166,6 +166,7 @@ export default function Login() {
                         <p className="font-semibold text-slate-600 mb-1">Demo credentials</p>
                         <p>🛡️ Admin: <span className="font-mono text-slate-700">{CREDENTIALS.admin.email}</span> / <span className="font-mono text-slate-700">{CREDENTIALS.admin.password}</span></p>
                         <p>👨‍🏫 Faculty: <span className="font-mono text-slate-700">{CREDENTIALS.faculty.email}</span> / <span className="font-mono text-slate-700">{CREDENTIALS.faculty.password}</span></p>
+                        <p className="text-[11px]">If your DB is freshly seeded, alternate admin may be <span className="font-mono text-slate-700">admin@fsdp.com / Admin@123</span>.</p>
                     </div>
                 </div>
             </div>

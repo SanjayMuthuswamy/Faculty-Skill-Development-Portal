@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { enrollmentsApi } from '../../lib/api/enrollments';
 import { attemptsApi } from '../../lib/api/attempts';
@@ -15,6 +16,8 @@ import { cn } from '../../lib/utils';
 
 export default function FacultyDashboard() {
     const { user } = useAuth();
+    const navigate = useNavigate();
+    const [performanceView, setPerformanceView] = useState<'daily' | 'weekly'>('daily');
 
     const { data: enrollments } = useQuery({
         queryKey: ['enrollments', user?.id],
@@ -56,54 +59,73 @@ export default function FacultyDashboard() {
         queryFn: coursesApi.listCourses,
     });
 
-    const completedPrograms = enrollments?.filter(e => e.status === EnrollmentStatus.COMPLETED).length || 0;
-    // BUG-FIX: EnrollmentStatus.IN_PROGRESS does not exist; the enum only has ENROLLED/CANCELLED/COMPLETED/DROPPED
-    const activePrograms = enrollments?.filter(e => e.status === EnrollmentStatus.ENROLLED).length || 0;
+    const recentCourseEnrollments = useMemo(
+        () => (myCourseEnrollments || []).slice(0, 3),
+        [myCourseEnrollments]
+    );
 
-    // BUG-FIX: `score` is a raw correct-answer count; `accuracy` is the percentage — use accuracy for display
+    const recentCourseProgressQueries = useQueries({
+        queries: recentCourseEnrollments.map((enrollment) => ({
+            queryKey: ['course-progress', enrollment.course_id],
+            queryFn: () => coursesApi.getCourseProgress(enrollment.course_id),
+            enabled: !!user && !enrollment.completed_at,
+        })),
+    });
+
+    const progressByCourseId = useMemo(() => {
+        const map = new Map<string, number>();
+        recentCourseEnrollments.forEach((enrollment, idx) => {
+            if (enrollment.completed_at) {
+                map.set(enrollment.course_id, 100);
+                return;
+            }
+            const pct = recentCourseProgressQueries[idx]?.data?.progress_pct;
+            map.set(enrollment.course_id, Math.max(0, Math.round(pct ?? 0)));
+        });
+        return map;
+    }, [recentCourseEnrollments, recentCourseProgressQueries]);
+
+    const completedPrograms = enrollments?.filter((e) => e.status === EnrollmentStatus.COMPLETED).length || 0;
+    const activePrograms = enrollments?.filter((e) => e.status === EnrollmentStatus.ENROLLED).length || 0;
+
     const avgScore = attempts && attempts.length > 0
         ? Math.round(attempts.reduce((acc, curr) => acc + (curr.accuracy || 0), 0) / attempts.length)
         : 0;
 
-    const verifiedSkillsCount = profile?.skills?.filter(s => s.status === SkillStatus.VERIFIED).length || 0;
-    const inProgressSkillsCount = profile?.skills?.filter(s => s.status === SkillStatus.PENDING || s.status === SkillStatus.UNVERIFIED).length || 0;
+    const verifiedSkillsCount = profile?.skills?.filter((s) => s.status === SkillStatus.VERIFIED).length || 0;
+    const inProgressSkillsCount = profile?.skills?.filter((s) => s.status === SkillStatus.PENDING || s.status === SkillStatus.UNVERIFIED).length || 0;
 
-    const upcomingPrograms = programs?.filter(p =>
+    const upcomingPrograms = programs?.filter((p) =>
         p.status === 'UPCOMING' || p.status === 'ONGOING' || p.status === 'PUBLISHED'
     ).slice(0, 3) || [];
-
-    const [performanceView, setPerformanceView] = useState<'daily' | 'weekly'>('daily');
 
     const chartData = useMemo(() => {
         if (!attempts || attempts.length === 0) return [];
 
-        // Sort attempts by date ascending
         const sortedAttempts = [...attempts].sort((a, b) =>
             new Date(a.submitted_at || a.started_at).getTime() - new Date(b.submitted_at || b.started_at).getTime()
         );
 
         if (performanceView === 'daily') {
-            return sortedAttempts.map(a => ({
+            return sortedAttempts.map((a) => ({
                 name: format(new Date(a.submitted_at || a.started_at), 'MMM d'),
-                score: Math.round(a.accuracy || 0)
+                score: Math.round(a.accuracy || 0),
             })).slice(-7);
-        } else {
-            // Weekly grouping
-            const weeks: Record<string, { total: number, count: number }> = {};
-            sortedAttempts.forEach(a => {
-                const date = new Date(a.submitted_at || a.started_at);
-                const weekStart = format(startOfWeek(date, { weekStartsOn: 1 }), 'MMM d');
-                if (!weeks[weekStart]) {
-                    weeks[weekStart] = { total: 0, count: 0 };
-                }
-                weeks[weekStart].total += (a.accuracy || 0);
-                weeks[weekStart].count += 1;
-            });
-            return Object.entries(weeks).map(([name, data]) => ({
-                name: `W/O ${name}`,
-                score: Math.round(data.total / data.count)
-            })).slice(-5);
         }
+
+        const weeks: Record<string, { total: number; count: number }> = {};
+        sortedAttempts.forEach((a) => {
+            const date = new Date(a.submitted_at || a.started_at);
+            const weekStart = format(startOfWeek(date, { weekStartsOn: 1 }), 'MMM d');
+            if (!weeks[weekStart]) weeks[weekStart] = { total: 0, count: 0 };
+            weeks[weekStart].total += (a.accuracy || 0);
+            weeks[weekStart].count += 1;
+        });
+
+        return Object.entries(weeks).map(([name, data]) => ({
+            name: `W/O ${name}`,
+            score: Math.round(data.total / data.count),
+        })).slice(-5);
     }, [attempts, performanceView]);
 
     return (
@@ -115,7 +137,6 @@ export default function FacultyDashboard() {
                 </div>
             </div>
 
-            {/* Stats Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -147,17 +168,15 @@ export default function FacultyDashboard() {
                         <p className="text-xs text-gray-500">{inProgressSkillsCount} in progress</p>
                     </CardContent>
                 </Card>
-                <Card className={cn(growthPlan ? "border-primary" : "")}>
+                <Card className={cn(growthPlan ? 'border-primary' : '')}>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">AI Growth Plan</CardTitle>
                         <Clock className="h-4 w-4 text-purple-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">
-                            {growthPlan ? `${growthPlan.progress_percentage}%` : "No Plan"}
-                        </div>
+                        <div className="text-2xl font-bold">{growthPlan ? `${growthPlan.progress_percentage}%` : 'No Plan'}</div>
                         <p className="text-xs text-gray-500">
-                            {growthPlan ? `${growthPlan.weeks.filter(w => w.completed).length} weeks done` : "Start setup now"}
+                            {growthPlan ? `${growthPlan.weeks.filter((w) => w.completed).length} weeks done` : 'Start setup now'}
                         </p>
                     </CardContent>
                 </Card>
@@ -171,10 +190,8 @@ export default function FacultyDashboard() {
                             <button
                                 onClick={() => setPerformanceView('daily')}
                                 className={cn(
-                                    "px-3 py-1 text-xs font-semibold rounded-md transition-all",
-                                    performanceView === 'daily'
-                                        ? "bg-white text-blue-600 shadow-sm"
-                                        : "text-slate-500 hover:text-slate-700"
+                                    'px-3 py-1 text-xs font-semibold rounded-md transition-all',
+                                    performanceView === 'daily' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                 )}
                             >
                                 Daily
@@ -182,10 +199,8 @@ export default function FacultyDashboard() {
                             <button
                                 onClick={() => setPerformanceView('weekly')}
                                 className={cn(
-                                    "px-3 py-1 text-xs font-semibold rounded-md transition-all",
-                                    performanceView === 'weekly'
-                                        ? "bg-white text-blue-600 shadow-sm"
-                                        : "text-slate-500 hover:text-slate-700"
+                                    'px-3 py-1 text-xs font-semibold rounded-md transition-all',
+                                    performanceView === 'weekly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                 )}
                             >
                                 Weekly
@@ -204,30 +219,27 @@ export default function FacultyDashboard() {
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <div className="flex h-full items-center justify-center text-gray-400">
-                                    No test data available
-                                </div>
+                                <div className="flex h-full items-center justify-center text-gray-400">No test data available</div>
                             )}
                         </div>
                     </CardContent>
                 </Card>
+
                 <Card className="col-span-3">
                     <CardHeader>
                         <CardTitle>Recommended Programs</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            {upcomingPrograms.map(program => (
+                            {upcomingPrograms.map((program) => (
                                 <div key={program.id} className="flex items-center">
                                     <div className="ml-4 space-y-1">
                                         <p className="text-sm font-medium leading-none">{program.title}</p>
                                         <p className="text-xs text-gray-500">
-                                            {program.start_date ? format(new Date(program.start_date), 'MMM d, yyyy') : 'TBD'} • {program.domain}
+                                            {program.start_date ? format(new Date(program.start_date), 'MMM d, yyyy') : 'TBD'} - {program.domain}
                                         </p>
                                     </div>
-                                    <div className="ml-auto font-medium text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                        {program.duration}
-                                    </div>
+                                    <div className="ml-auto font-medium text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">{program.duration}</div>
                                 </div>
                             ))}
                             {upcomingPrograms.length === 0 && <p className="text-sm text-gray-500">No active or upcoming programs found</p>}
@@ -236,7 +248,6 @@ export default function FacultyDashboard() {
                 </Card>
             </div>
 
-            {/* ── My Courses ─────────────────────────────────────────── */}
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -244,21 +255,24 @@ export default function FacultyDashboard() {
                         <h2 className="text-lg font-bold text-slate-800">My Courses</h2>
                         {myCourseEnrollments && <span className="text-xs bg-blue-100 text-blue-600 font-bold px-2 py-0.5 rounded-full">{myCourseEnrollments.length}</span>}
                     </div>
-                    <a href="/faculty/courses" className="text-xs text-blue-600 font-semibold hover:underline">View All →</a>
+                    <button onClick={() => navigate('/faculty/courses')} className="text-xs text-blue-600 font-semibold hover:underline">View All</button>
                 </div>
+
                 {(!myCourseEnrollments || myCourseEnrollments.length === 0) ? (
                     <Card>
                         <CardContent className="flex flex-col items-center py-10 text-slate-400">
                             <BookOpen className="h-8 w-8 mb-2 opacity-30" />
-                            <p className="text-sm">You haven't enrolled in any courses yet.</p>
-                            <a href="/faculty/courses" className="mt-2 text-xs text-blue-500 hover:underline">Browse courses →</a>
+                            <p className="text-sm">You have not enrolled in any courses yet.</p>
+                            <button onClick={() => navigate('/faculty/courses')} className="mt-2 text-xs text-blue-500 hover:underline">Browse courses</button>
                         </CardContent>
                     </Card>
                 ) : (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {myCourseEnrollments.slice(0, 3).map(enrollment => {
-                            const course = allCourses?.find(c => c.id === enrollment.course_id);
+                        {recentCourseEnrollments.map((enrollment) => {
+                            const course = allCourses?.find((c) => c.id === enrollment.course_id);
                             if (!course) return null;
+                            const progressPct = progressByCourseId.get(course.id) ?? 0;
+
                             return (
                                 <Card key={enrollment.id} className="hover:shadow-md transition-shadow">
                                     <CardContent className="pt-5 space-y-3">
@@ -266,21 +280,23 @@ export default function FacultyDashboard() {
                                             <h4 className="text-sm font-bold text-slate-800 leading-snug">{course.title}</h4>
                                             {enrollment.completed_at && <span className="flex-shrink-0 text-xs bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded">Done</span>}
                                         </div>
-                                        <p className="text-xs text-slate-400">{course.instructor_name} · {course.skill_level}</p>
+                                        <p className="text-xs text-slate-400">{course.instructor_name} - {course.skill_level}</p>
                                         <div className="space-y-1.5">
                                             <div className="flex justify-between text-xs text-slate-500">
                                                 <span>Progress</span>
-                                                <span>{enrollment.completed_at ? '100%' : 'In Progress'}</span>
+                                                <span>{progressPct}%</span>
                                             </div>
                                             <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: enrollment.completed_at ? '100%' : '30%' }} />
+                                                <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
                                             </div>
                                         </div>
-                                        <a href={`/faculty/courses/${course.id}`}
-                                            className="flex items-center justify-center gap-1.5 w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors">
+                                        <button
+                                            onClick={() => navigate(`/faculty/courses/${course.id}`)}
+                                            className="flex items-center justify-center gap-1.5 w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors"
+                                        >
                                             <PlayCircle className="h-3.5 w-3.5" />
                                             Continue Learning
-                                        </a>
+                                        </button>
                                     </CardContent>
                                 </Card>
                             );
@@ -289,35 +305,41 @@ export default function FacultyDashboard() {
                 )}
             </div>
 
-            {/* ── Available Courses ───────────────────────────────────── */}
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Star className="h-5 w-5 text-amber-500" />
                         <h2 className="text-lg font-bold text-slate-800">Available Courses</h2>
                     </div>
-                    <a href="/faculty/courses" className="text-xs text-blue-600 font-semibold hover:underline">Browse All →</a>
+                    <button onClick={() => navigate('/faculty/courses')} className="text-xs text-blue-600 font-semibold hover:underline">Browse All</button>
                 </div>
+
                 {(!allCourses || allCourses.length === 0) ? (
                     <p className="text-sm text-slate-400">No courses available right now.</p>
                 ) : (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        {allCourses.filter(c => c.is_published).slice(0, 4).map(course => (
+                        {allCourses.filter((c) => c.is_published).slice(0, 4).map((course) => (
                             <Card key={course.id} className="hover:shadow-md transition-shadow border-l-4 border-l-blue-400">
                                 <CardContent className="pt-4 space-y-2">
                                     <div className="flex items-center gap-1.5">
-                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide
-                                            ${course.skill_level === 'beginner' ? 'bg-green-100 text-green-700' :
-                                                course.skill_level === 'intermediate' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${
+                                            course.skill_level === 'beginner'
+                                                ? 'bg-green-100 text-green-700'
+                                                : course.skill_level === 'intermediate'
+                                                    ? 'bg-yellow-100 text-yellow-700'
+                                                    : 'bg-red-100 text-red-700'
+                                        }`}>
                                             {course.skill_level}
                                         </span>
                                     </div>
                                     <h4 className="text-sm font-bold text-slate-800 leading-snug">{course.title}</h4>
                                     <p className="text-xs text-slate-400">{course.instructor_name}</p>
-                                    <a href={`/faculty/courses/${course.id}`}
-                                        className="flex items-center justify-center gap-1 text-xs text-blue-600 font-semibold hover:underline pt-1">
-                                        View Course →
-                                    </a>
+                                    <button
+                                        onClick={() => navigate(`/faculty/courses/${course.id}`)}
+                                        className="flex items-center justify-center gap-1 text-xs text-blue-600 font-semibold hover:underline pt-1"
+                                    >
+                                        View Course
+                                    </button>
                                 </CardContent>
                             </Card>
                         ))}

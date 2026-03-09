@@ -21,7 +21,7 @@ export default function PracticePlayer() {
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [isFinished, setIsFinished] = useState(false);
 
-    const { data: currentSet, isLoading } = useQuery({
+    const { data: currentSet, isLoading, isError, error, refetch } = useQuery({
         queryKey: ['practice-set', setId],
         queryFn: () => practiceSetsApi.getSet(setId!),
         enabled: !!setId && !!user?.id
@@ -43,13 +43,41 @@ export default function PracticePlayer() {
         }
     });
 
-    if (isLoading || !currentSet) {
+    if (isLoading) {
         return (
             <div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="h-10 w-10 animate-spin text-indigo-600 mx-auto mb-4" />
                     <p className="text-slate-500 font-medium">Preparing AI practice session...</p>
                 </div>
+            </div>
+        );
+    }
+
+    if (isError || !currentSet) {
+        const detail =
+            (error as any)?.response?.data?.detail ||
+            (error as Error | undefined)?.message ||
+            'Unable to load this practice set right now.';
+        return (
+            <div className="fixed inset-0 bg-slate-50 z-[9999] flex items-center justify-center p-6">
+                <Card className="max-w-lg w-full p-8 text-center space-y-5 border border-red-100">
+                    <div className="h-14 w-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+                        <AlertCircle className="h-7 w-7" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-900">Could not open practice set</h2>
+                        <p className="text-sm text-slate-600 mt-2">{detail}</p>
+                    </div>
+                    <div className="flex gap-3 justify-center">
+                        <Button variant="outline" onClick={() => navigate('/faculty/practice')}>
+                            Back
+                        </Button>
+                        <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => refetch()}>
+                            Retry
+                        </Button>
+                    </div>
+                </Card>
             </div>
         );
     }

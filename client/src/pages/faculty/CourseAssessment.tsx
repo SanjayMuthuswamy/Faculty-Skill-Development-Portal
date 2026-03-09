@@ -110,6 +110,7 @@ export default function CourseAssessmentPage() {
     const [submitted, setSubmitted] = useState(false);
     const [attempt, setAttempt] = useState<CourseAttempt | null>(null);
     const startTime = useRef(Date.now());
+    const answersRef = useRef<Record<string, string>>({});
 
     const { data: questions = [], isLoading } = useQuery({
         queryKey: ['assessment', id],
@@ -127,15 +128,19 @@ export default function CourseAssessmentPage() {
     });
 
     useEffect(() => {
+        answersRef.current = answers;
+    }, [answers]);
+
+    useEffect(() => {
         if (submitted || questions.length === 0) return;
         const timer = setInterval(() => {
             setTimeLeft(t => {
-                if (t <= 1) { clearInterval(timer); submitMutation.mutate(answers); return 0; }
+                if (t <= 1) { clearInterval(timer); submitMutation.mutate(answersRef.current); return 0; }
                 return t - 1;
             });
         }, 1000);
         return () => clearInterval(timer);
-    }, [submitted, questions.length]);
+    }, [submitted, questions.length, submitMutation]);
 
     if (isLoading) return (
         <div className="flex items-center justify-center h-64">
@@ -157,6 +162,9 @@ export default function CourseAssessmentPage() {
     const progress = ((currentQ + 1) / questions.length) * 100;
     const isLast = currentQ === questions.length - 1;
     const timerWarning = timeLeft < 5 * 60;
+    const handleOptionSelect = (optionKey: string) => {
+        setAnswers((prev) => ({ ...prev, [q.id]: optionKey }));
+    };
 
     return (
         <div className="max-w-2xl mx-auto space-y-5">
@@ -184,10 +192,12 @@ export default function CourseAssessmentPage() {
                 <h2 className="text-base font-semibold text-slate-800 mb-5 leading-relaxed">{q.question_text}</h2>
                 <div className="space-y-2.5">
                     {Object.entries(q.options).map(([key, val]) => (
-                        <label
+                        <button
                             key={key}
+                            type="button"
+                            onClick={() => handleOptionSelect(key)}
                             className={cn(
-                                "flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer border-2 text-sm font-medium transition-all",
+                                "w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer border-2 text-sm font-medium transition-all",
                                 answers[q.id] === key
                                     ? "border-blue-500 bg-blue-50 text-blue-700"
                                     : "border-slate-200 hover:border-slate-300 text-slate-700 bg-white"
@@ -198,7 +208,7 @@ export default function CourseAssessmentPage() {
                                 answers[q.id] === key ? "border-blue-500 bg-blue-500 text-white" : "border-slate-300"
                             )}>{key}</span>
                             {val}
-                        </label>
+                        </button>
                     ))}
                 </div>
             </div>
@@ -231,7 +241,7 @@ export default function CourseAssessmentPage() {
                 {isLast ? (
                     <button
                         onClick={() => submitMutation.mutate(answers)}
-                        disabled={submitMutation.isPending}
+                        disabled={submitMutation.isPending || !answers[q.id]}
                         className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
                         {submitMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
