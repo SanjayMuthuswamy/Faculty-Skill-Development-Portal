@@ -17,6 +17,21 @@ function toSafeNumber(value: unknown): number {
     return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeAnalyticsRows(data: unknown): CourseAnalytics[] {
+    if (!Array.isArray(data)) return [];
+
+    return data
+        .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+        .map((row, index) => ({
+            course_id: String(row.course_id ?? `course-${index}`),
+            course_title: String(row.course_title ?? 'Untitled Course'),
+            total_enrolled: toSafeNumber(row.total_enrolled),
+            total_completed: toSafeNumber(row.total_completed),
+            completion_rate: toSafeNumber(row.completion_rate),
+            average_score: toSafeNumber(row.average_score),
+        }));
+}
+
 function truncateCourseTitle(title: string, maxLen: number = 30) {
     if (!title) return '';
     if (title.length <= maxLen) return title;
@@ -40,10 +55,11 @@ function EnrollmentTooltip({ active, payload }: any) {
 }
 
 export default function CourseAnalyticsPage() {
-    const { data: analytics = [], isLoading } = useQuery({
+    const { data, isLoading } = useQuery({
         queryKey: ['course-analytics'],
         queryFn: coursesApi.getAnalytics,
     });
+    const analytics = useMemo(() => normalizeAnalyticsRows(data), [data]);
 
     if (isLoading) {
         return (

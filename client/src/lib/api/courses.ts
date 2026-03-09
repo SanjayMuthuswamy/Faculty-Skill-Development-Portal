@@ -172,6 +172,11 @@ export const coursesApi = {
 
     // Admin analytics
     getAnalytics: (): Promise<CourseAnalytics[]> =>
-        http.get('/api/v1/courses/analytics').then(r => r.data),
+        http.get('/api/v1/courses/analytics').then(r => {
+            if (Array.isArray(r.data)) return r.data as CourseAnalytics[];
+            if (Array.isArray(r.data?.data)) return r.data.data as CourseAnalytics[];
+            if (Array.isArray(r.data?.items)) return r.data.items as CourseAnalytics[];
+            return [];
+        }),
 };
 
