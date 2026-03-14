@@ -1,4 +1,4 @@
-version: '3.9'
+  version: '3.9'
 
 services:
   postgres:
@@ -26,13 +26,13 @@ services:
       dockerfile: Dockerfile
     container_name: fsdp_server
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/fsdp_db
-      JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
-      JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
-      REFRESH_TOKEN_EXPIRE_DAYS: 7
-      CORS_ORIGINS: '["http://localhost:5173", "http://127.0.0.1:5173"]'
-      DEBUG: "true"
+      DATABASE_URL: "${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/fsdp_db}"
+      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in environment}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in environment}"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "${ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
+      REFRESH_TOKEN_EXPIRE_DAYS: "${REFRESH_TOKEN_EXPIRE_DAYS:-7}"
+      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:5173","http://127.0.0.1:5173"]}'
+      DEBUG: "${DEBUG:-false}"
     ports:
       - "8000:8000"
     depends_on:
@@ -40,7 +40,7 @@ services:
         condition: service_healthy
     networks:
       - fsdp_network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 volumes:
   postgres_data:

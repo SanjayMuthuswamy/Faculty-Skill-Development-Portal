@@ -31,14 +31,20 @@ class AIQuestionService:
         )
         self.db.add(batch)
         
-        # Call LLM to generate quiz
-        # Map difficulty Beginer/Intermediate/Advanced to Easy/Medium/Hard for LLM if needed
-        # But batch_in.difficulty usually matches what the UI sends.
+        # Keep fallback generation anchored to the clean topic so prompt text
+        # is not echoed into generated questions/options when no external LLM is configured.
+        prompt_topic = batch_in.prompt.strip() or batch_in.topic
+        combined_topic = prompt_topic
+        if batch_in.topic and batch_in.topic.lower() not in prompt_topic.lower():
+            combined_topic = f"{batch_in.topic}: {prompt_topic}"
+
+        quiz_topic = combined_topic if self.llm._remote_enabled() else batch_in.topic
+
         quiz_data = await self.llm.generate_quiz(
-            topic=batch_in.topic,
+            topic=quiz_topic,
             difficulty=batch_in.difficulty,
             num_questions=batch_in.count,
-            marks=10 # Default marks per question
+            marks=10
         )
 
         if not quiz_data:

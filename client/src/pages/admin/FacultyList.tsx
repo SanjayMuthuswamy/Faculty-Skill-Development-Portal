@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Ca
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
+import { Pagination } from '../../components/ui/Pagination';
+import { useDebouncedValue } from '../../lib/hooks/useDebouncedValue';
 import {
     Users,
     TrendingUp,
@@ -27,6 +29,9 @@ export function FacultyList() {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
     const [deptFilter, setDeptFilter] = useState('All');
+    const [currentPage, setCurrentPage] = useState(1);
+    const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
+    const ITEMS_PER_PAGE = 10;
     const [showAddModal, setShowAddModal] = useState(false);
     const [newFaculty, setNewFaculty] = useState({
         name: '',
@@ -69,9 +74,14 @@ export function FacultyList() {
         createMutation.mutate(newFaculty);
     };
 
-    const { data: facultyList, isLoading: loadingList, error: listError } = useQuery({
-        queryKey: ['admin', 'faculty', 'list'],
-        queryFn: () => facultyApi.listProfiles(),
+    const { data: facultyListData, isLoading: loadingList, error: listError } = useQuery({
+        queryKey: ['admin', 'faculty', 'list', currentPage, ITEMS_PER_PAGE, debouncedSearchQuery, deptFilter],
+        queryFn: () => facultyApi.listProfilesPaginated({
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            search: debouncedSearchQuery || undefined,
+            department: deptFilter !== 'All' ? deptFilter : undefined,
+        }),
     });
 
     const { data: departmentSummary } = useQuery({
@@ -87,14 +97,11 @@ export function FacultyList() {
         return { progress: avgProgress, verified: totalVerified, attention: attentionNeeded };
     }, [departmentSummary]);
 
-    const filteredFaculty = (facultyList ?? []).filter(f => {
-        const matchesSearch = (f.user?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (f.user?.email || '').toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesDept = deptFilter === 'All' || f.department === deptFilter;
-        return matchesSearch && matchesDept;
-    });
+    const facultyList = facultyListData?.items ?? [];
+    const totalPages = facultyListData?.total_pages ?? 1;
+    const totalFaculty = facultyListData?.total ?? 0;
 
-    const departments = ['All', ...new Set(facultyList?.map(f => f.department).filter(Boolean) as string[])];
+    const departments = ['All', ...new Set((departmentSummary ?? []).map((d) => d.department).filter(Boolean) as string[])];
 
     if (loadingList) {
         return <div className="p-8 flex items-center justify-center h-[400px]"><Activity className="h-8 w-8 animate-spin text-blue-600" /></div>;
@@ -120,7 +127,10 @@ export function FacultyList() {
                             placeholder="Search name or email..."
                             className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setCurrentPage(1);
+                            }}
                         />
                     </div>
                     <div className="relative">
@@ -128,7 +138,10 @@ export function FacultyList() {
                         <select
                             className="pl-10 pr-8 py-2 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm appearance-none min-w-[140px]"
                             value={deptFilter}
-                            onChange={(e) => setDeptFilter(e.target.value)}
+                            onChange={(e) => {
+                                setDeptFilter(e.target.value);
+                                setCurrentPage(1);
+                            }}
                         >
                             {departments.map(d => <option key={d} value={d}>{d}</option>)}
                         </select>
@@ -147,7 +160,7 @@ export function FacultyList() {
                         <Users className="h-4 w-4 text-blue-500 group-hover:scale-110 transition-transform" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{facultyList?.length || 0}</div>
+                        <div className="text-2xl font-bold">{totalFaculty}</div>
                         <p className="text-[10px] text-gray-500 mt-1">Active instructors</p>
                     </CardContent>
                 </Card>
@@ -201,10 +214,10 @@ export function FacultyList() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredFaculty.map((faculty) => (
+                            {facultyList.map((faculty) => (
                                 <FacultyRow key={faculty.id} faculty={faculty} onView={() => navigate(`/admin/faculty/${faculty.id}`)} />
                             ))}
-                            {filteredFaculty.length === 0 && (
+                            {facultyList.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={8} className="h-32 text-center text-gray-500 font-bold italic">
                                         {listError
@@ -217,6 +230,14 @@ export function FacultyList() {
                     </Table>
                 </CardContent>
             </Card>
+            {totalPages > 1 && (
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    className="pt-0"
+                />
+            )}
 
             {/* Add Faculty Modal */}
             <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity ${showAddModal ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>

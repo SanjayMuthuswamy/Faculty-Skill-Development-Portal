@@ -161,9 +161,16 @@ export default function FacultyProfile() {
         if (editingSkill) {
             updateSkillMutation.mutate({ id: editingSkill.id, updates: { level: parseInt(data.level) } });
         } else {
+            const category = data.category as string;
+            const mappedDomain =
+                category === 'technical'
+                    ? SkillDomain.TECHNOLOGY
+                    : category === 'pedagogy'
+                        ? SkillDomain.TEACHING
+                        : SkillDomain.COMMUNICATION;
             addSkillMutation.mutate({
                 skill_name: data.name,
-                domain: data.category === 'technical' ? SkillDomain.TECHNOLOGY : SkillDomain.TEACHING,
+                domain: mappedDomain,
                 level: parseInt(data.level)
             });
         }

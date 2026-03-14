@@ -1,16 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../app/providers/AuthProvider';
 import { Button } from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
-import { Eye, EyeOff, GraduationCap, ShieldCheck, Sparkles, Lock, User as UserIcon } from 'lucide-react';
-
-const CREDENTIALS = {
-    admin: { email: 'sanjay@fsdp.com', password: '123456' },
-    faculty: { email: 'faculty@fsdp.com', password: '123456' },
-};
+import { Eye, EyeOff, KeyRound, Mail, GraduationCap, ShieldCheck, LineChart } from 'lucide-react';
 
 const loginSchema = z.object({
     email: z.string().email('Invalid email address'),
@@ -24,24 +20,15 @@ export default function Login() {
     const { addToast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const emailRef = useRef<HTMLInputElement | null>(null);
 
     const {
         register,
         handleSubmit,
-        setValue,
         formState: { errors },
     } = useForm<LoginFormValues>({
         resolver: zodResolver(loginSchema),
         defaultValues: { email: '', password: '' },
     });
-
-    const { ref: emailFormRef, ...emailRest } = register('email');
-
-    const fillCredentials = (role: 'admin' | 'faculty') => {
-        setValue('email', CREDENTIALS[role].email, { shouldValidate: true });
-        setValue('password', CREDENTIALS[role].password, { shouldValidate: true });
-    };
 
     const onSubmit = async (data: LoginFormValues) => {
         setIsLoading(true);
@@ -56,118 +43,112 @@ export default function Login() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 to-blue-50 px-4 py-12">
-            <div className="w-full max-w-md">
-                {/* Logo */}
-                <div className="flex items-center justify-center gap-3 mb-8">
-                    <div className="h-12 w-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/30">
-                        <GraduationCap className="h-7 w-7 text-white" />
-                    </div>
-                    <span className="text-2xl font-extrabold tracking-tight text-slate-900 uppercase">FSD Portal</span>
-                </div>
+        <div className="relative min-h-screen overflow-hidden bg-slate-50">
+            <div className="pointer-events-none absolute left-0 top-0 h-80 w-80 rounded-full bg-blue-100 blur-3xl" />
+            <div className="pointer-events-none absolute right-0 top-40 h-72 w-72 rounded-full bg-slate-200/70 blur-3xl" />
 
-                {/* Card */}
-                <div className="bg-white rounded-3xl shadow-xl border border-slate-100 p-8">
-                    <h2 className="text-2xl font-bold text-slate-900 mb-1">Welcome back</h2>
-                    <p className="text-sm text-slate-500 mb-7">Sign in to your professional workspace</p>
-
-                    {/* Quick-fill chips */}
-                    <div className="flex gap-3 mb-6">
-                        <button
-                            type="button"
-                            onClick={() => fillCredentials('admin')}
-                            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-600 hover:text-blue-700 text-sm font-semibold transition-all"
-                        >
-                            <ShieldCheck className="h-4 w-4" /> Admin
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => fillCredentials('faculty')}
-                            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 text-slate-600 hover:text-amber-700 text-sm font-semibold transition-all"
-                        >
-                            <Sparkles className="h-4 w-4" /> Faculty
-                        </button>
-                    </div>
-
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" autoComplete="on">
-                        {/* Email */}
+            <div className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-8 sm:px-6 lg:py-12">
+                <div className="grid w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 lg:grid-cols-2">
+                    <section className="relative hidden overflow-hidden bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 p-10 text-white lg:flex lg:flex-col lg:justify-between">
                         <div>
-                            <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 mb-1.5">
-                                <UserIcon className="h-4 w-4 text-slate-400" /> Email
-                            </label>
-                            {/* datalist provides browser-native autocomplete suggestions */}
-                            <datalist id="email-suggestions">
-                                <option value={CREDENTIALS.admin.email} label="Admin" />
-                                <option value={CREDENTIALS.faculty.email} label="Faculty" />
-                            </datalist>
-                            <input
-                                {...emailRest}
-                                ref={(e) => {
-                                    emailFormRef(e);
-                                    emailRef.current = e;
-                                }}
-                                type="email"
-                                list="email-suggestions"
-                                autoComplete="email"
-                                placeholder="you@example.com"
-                                className={`w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all
-                                    ${errors.email
-                                        ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-                                        : 'border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-                                    }`}
-                            />
-                            {errors.email && (
-                                <p className="text-xs text-rose-600 font-medium mt-1">{errors.email.message}</p>
-                            )}
-                        </div>
-
-                        {/* Password */}
-                        <div>
-                            <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 mb-1.5">
-                                <Lock className="h-4 w-4 text-slate-400" /> Password
-                            </label>
-                            <div className="relative">
-                                <input
-                                    {...register('password')}
-                                    type={showPassword ? 'text' : 'password'}
-                                    autoComplete="current-password"
-                                    placeholder="••••••••"
-                                    className={`w-full h-12 px-4 pr-12 rounded-xl border text-sm font-medium outline-none transition-all
-                                        ${errors.password
-                                            ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-                                            : 'border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-                                        }`}
-                                />
-                                <button
-                                    type="button"
-                                    tabIndex={-1}
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                                >
-                                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                                </button>
+                            <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white">
+                                <GraduationCap className="h-4 w-4" />
+                                Faculty Skill Development Portal
                             </div>
-                            {errors.password && (
-                                <p className="text-xs text-rose-600 font-medium mt-1">{errors.password.message}</p>
-                            )}
+                            <h1 className="max-w-sm text-4xl font-black leading-tight text-white">
+                                Build stronger faculty capabilities with confidence.
+                            </h1>
+                            <p className="mt-4 max-w-md text-sm text-blue-100">
+                                One platform for assessments, learning programs, AI-guided growth, and role-based tracking.
+                            </p>
                         </div>
 
-                        <Button
-                            type="submit"
-                            isLoading={isLoading}
-                            className="w-full h-12 rounded-xl text-base font-bold bg-blue-600 hover:bg-blue-700 active:scale-[0.99] transition-all mt-2"
-                        >
-                            Sign In
-                        </Button>
-                    </form>
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
+                                <ShieldCheck className="h-5 w-5 text-blue-100" />
+                                <p className="text-sm font-semibold">Secure role-based access for faculty and admins</p>
+                            </div>
+                            <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
+                                <LineChart className="h-5 w-5 text-blue-100" />
+                                <p className="text-sm font-semibold">Track performance and progress in one dashboard</p>
+                            </div>
+                        </div>
+                    </section>
 
-                    {/* Credential hint */}
-                    <div className="mt-6 p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 space-y-1">
-                        <p className="font-semibold text-slate-600 mb-1">Demo credentials</p>
-                        <p>🛡️ Admin: <span className="font-mono text-slate-700">{CREDENTIALS.admin.email}</span> / <span className="font-mono text-slate-700">{CREDENTIALS.admin.password}</span></p>
-                        <p>👨‍🏫 Faculty: <span className="font-mono text-slate-700">{CREDENTIALS.faculty.email}</span> / <span className="font-mono text-slate-700">{CREDENTIALS.faculty.password}</span></p>
-                        <p className="text-[11px]">If your DB is freshly seeded, alternate admin may be <span className="font-mono text-slate-700">admin@fsdp.com / Admin@123</span>.</p>
-                    </div>
+                    <section className="flex items-center justify-center px-5 py-8 sm:px-8 lg:px-12">
+                        <div className="w-full max-w-md">
+                            <Link
+                                to="/"
+                                className="mb-8 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 transition hover:border-blue-200 hover:text-blue-700"
+                            >
+                                <GraduationCap className="h-3.5 w-3.5" />
+                                Back to Home
+                            </Link>
+
+                            <h2 className="text-3xl font-black tracking-tight text-slate-900">Sign In</h2>
+                            <p className="mt-2 text-sm text-slate-500">Enter your official credentials to continue.</p>
+
+                            <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5" autoComplete="on">
+                                <div>
+                                    <label className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                        <Mail className="h-4 w-4 text-blue-600" /> Work Email
+                                    </label>
+                                    <input
+                                        {...register('email')}
+                                        type="email"
+                                        autoComplete="email"
+                                        placeholder="name@university.edu"
+                                        className={`h-12 w-full rounded-xl border bg-white px-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400
+                                            ${errors.email
+                                                ? 'border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
+                                                : 'border-slate-200 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10'
+                                            }`}
+                                    />
+                                    {errors.email && (
+                                        <p className="mt-1 text-xs font-medium text-rose-500">{errors.email.message}</p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                        <KeyRound className="h-4 w-4 text-blue-600" /> Password
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            {...register('password')}
+                                            type={showPassword ? 'text' : 'password'}
+                                            autoComplete="current-password"
+                                            placeholder="Enter your password"
+                                            className={`h-12 w-full rounded-xl border bg-white px-4 pr-12 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400
+                                                ${errors.password
+                                                    ? 'border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
+                                                    : 'border-slate-200 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10'
+                                                }`}
+                                        />
+                                        <button
+                                            type="button"
+                                            tabIndex={-1}
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 transition-colors hover:text-slate-800"
+                                        >
+                                            {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                        </button>
+                                    </div>
+                                    {errors.password && (
+                                        <p className="mt-1 text-xs font-medium text-rose-500">{errors.password.message}</p>
+                                    )}
+                                </div>
+
+                                <Button type="submit" isLoading={isLoading} className="h-12 w-full">
+                                    Enter Portal
+                                </Button>
+                            </form>
+
+                            <p className="mt-8 text-center text-xs text-slate-500">
+                                Secure academic workspace. Authorized users only.
+                            </p>
+                        </div>
+                    </section>
                 </div>
             </div>
         </div>

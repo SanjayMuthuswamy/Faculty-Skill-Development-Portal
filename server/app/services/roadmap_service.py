@@ -156,60 +156,11 @@ class RoadmapService:
                         )
                     )
         else:
-            logger.warning("--- [Roadmap] AI failed, generating fallback roadmap ---")
-            for i in range(1, weeks + 1):
-                goals = [
-                    f"Study {skill} fundamentals - Week {i}",
-                    f"Complete measurable exercises for {skill}",
-                ]
-                topics = [f"{skill} - Part {i}"]
-                practice = self._ensure_rigorous_practice(
-                    skill,
-                    i,
-                    topics,
-                    [
-                        f"TEST: Take a timed 15-question test on {skill} fundamentals; target score >= 70%.",
-                        f"BUILD: Create a mini-project related to {skill} and document setup plus output.",
-                        f"REVIEW: Write a weekly reflection with errors, fixes, and next-week focus.",
-                    ],
-                )
-
-                week = RoadmapWeek(
-                    id=str(uuid4()),
-                    roadmap_id=roadmap.id,
-                    week_number=i,
-                    goals=goals,
-                    topics=topics,
-                    resources=[
-                        {
-                            "title": f"{skill} documentation",
-                            "url": "https://google.com/search?q=" + skill.replace(" ", "+"),
-                        }
-                    ],
-                    practice=practice,
-                )
-                self.db.add(week)
-
-                for idx in range(len(goals)):
-                    self.db.add(
-                        RoadmapItem(
-                            id=str(uuid4()),
-                            week_id=week.id,
-                            item_type="goal",
-                            item_index=idx,
-                            completed=False,
-                        )
-                    )
-                for idx in range(len(practice)):
-                    self.db.add(
-                        RoadmapItem(
-                            id=str(uuid4()),
-                            week_id=week.id,
-                            item_type="practice",
-                            item_index=idx,
-                            completed=False,
-                        )
-                    )
+            logger.error("--- [Roadmap] AI generation failed ---")
+            raise RuntimeError(
+                "Roadmap generation is temporarily unavailable. "
+                "Please try again after AI service is restored."
+            )
 
         await self.db.commit()
         logger.info(f"--- [Roadmap] Roadmap {roadmap.id} created ---")

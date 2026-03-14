@@ -1,6 +1,6 @@
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1 import deps
@@ -23,7 +23,12 @@ async def create_practice_set(
         raise HTTPException(status_code=404, detail="Faculty profile not found")
         
     service = PracticeSetService(db)
-    return await service.generate_set(profile.id, set_in)
+    try:
+        return await service.generate_set(profile.id, set_in)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
 @router.get("/me", response_model=List[PracticeSet])
 async def get_my_practice_sets(

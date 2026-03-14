@@ -35,8 +35,19 @@
 .dockerignore
 
 # Environment
+.env
 .env.local
 .env.*.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Local tool settings
+.claude/
 
 # Logs
 *.log

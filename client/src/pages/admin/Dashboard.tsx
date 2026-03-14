@@ -173,11 +173,14 @@ export default function AdminDashboard() {
                                         <XAxis
                                             dataKey="name"
                                             fontSize={10}
+                                            interval={0}
+                                            tickMargin={10}
                                             tickLine={false}
                                             axisLine={false}
                                             tick={{ fill: '#94a3b8', fontWeight: 800 }}
                                         />
                                         <YAxis
+                                            domain={[0, 100]}
                                             fontSize={10}
                                             tickLine={false}
                                             axisLine={false}

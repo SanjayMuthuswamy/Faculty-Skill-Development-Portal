@@ -74,32 +74,11 @@ class GrowthPlanService:
                     )
                     self.db.add(task)
         else:
-            logger.warning("--- [GrowthPlan] AI roadmap failed, using fallback template ---")
-            # Fallback to simple logic
-            for i in range(1, 5):
-                week = GrowthWeek(
-                    id=str(uuid4()),
-                    plan_id=plan.id,
-                    week_number=i,
-                    title=f"Week {i}: {plan_in.target_skill} Fundamentals",
-                    required_practice_count=3,
-                    required_min_avg_score=60.0
-                )
-                self.db.add(week)
-                
-                tasks = [
-                    f"Read documentation on {plan_in.target_skill}",
-                    f"Complete 3 practice tests",
-                    f"Review mistakes from previous attempts"
-                ]
-                for t_label in tasks:
-                    task = WeekTask(
-                        id=str(uuid4()),
-                        week_id=week.id,
-                        label=t_label,
-                        done=False
-                    )
-                    self.db.add(task)
+            logger.error("--- [GrowthPlan] AI roadmap generation failed ---")
+            raise RuntimeError(
+                "Growth plan generation is temporarily unavailable. "
+                "Please try again after AI service is restored."
+            )
                 
         await self.db.commit()
         await self.db.refresh(plan)
@@ -179,13 +158,23 @@ class GrowthPlanService:
         return True
 
     async def complete_week(self, week_id: str) -> bool:
-        result = await self.db.execute(select(GrowthWeek).where(GrowthWeek.id == week_id).options(selectinload(GrowthWeek.plan)))
+        result = await self.db.execute(
+            select(GrowthWeek)
+            .where(GrowthWeek.id == week_id)
+            .options(
+                selectinload(GrowthWeek.tasks),
+                selectinload(GrowthWeek.plan).selectinload(GrowthPlan.weeks),
+            )
+        )
         week = result.scalar_one_or_none()
         
         if not week or week.completed:
             return False
-            
-        # Logic: Check if conditions met (mocked here as always true if requested)
+
+        # A week can only be completed if all its tasks are done.
+        if week.tasks and not all(t.done for t in week.tasks):
+            return False
+
         week.completed = True
         week.completed_at = datetime.now(timezone.utc)
         

@@ -10,6 +10,8 @@ import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
 import { Calendar, Users, Clock, Search } from 'lucide-react';
 import { format } from 'date-fns';
+import { Pagination } from '../../components/ui/Pagination';
+import { useDebouncedValue } from '../../lib/hooks/useDebouncedValue';
 
 export default function FacultyPrograms() {
     const { user } = useAuth();
@@ -17,25 +19,27 @@ export default function FacultyPrograms() {
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [filterMode, setFilterMode] = useState<'all' | 'online' | 'offline' | 'hybrid'>('all');
+    const [currentPage, setCurrentPage] = useState(1);
+    const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
+    const ITEMS_PER_PAGE = 9;
 
-    const { data: programs, isLoading } = useQuery({
-        queryKey: ['programs'],
-        queryFn: () => programsApi.listPrograms(),
+    const { data: programsData, isLoading } = useQuery({
+        queryKey: ['programs', currentPage, ITEMS_PER_PAGE, debouncedSearchTerm, filterMode],
+        queryFn: () => programsApi.listProgramsPaginated({
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            search: debouncedSearchTerm || undefined,
+            mode: filterMode !== 'all' ? filterMode : undefined,
+        }),
     });
     const { data: enrollments } = useQuery({
         queryKey: ['enrollments', user?.id],
         queryFn: enrollmentsApi.getMyEnrollments,
         enabled: !!user,
     });
-
-
-
-    const filteredPrograms = programs?.filter(program => {
-        const matchesSearch = program.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            program.domain.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesMode = filterMode === 'all' || program.mode?.toLowerCase() === filterMode.toLowerCase();
-        return matchesSearch && matchesMode;
-    });
+    const filteredPrograms = programsData?.items ?? [];
+    const totalPages = programsData?.total_pages ?? 1;
+    const pagedPrograms = filteredPrograms;
 
     const isEnrolled = (programId: string) => {
         return enrollments?.some(e => e.program_id === programId);
@@ -55,13 +59,19 @@ export default function FacultyPrograms() {
                             placeholder="Search programs..."
                             className="pl-9"
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setCurrentPage(1);
+                            }}
                         />
                     </div>
                     <select
                         className="h-10 rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 w-32"
                         value={filterMode}
-                        onChange={(e) => setFilterMode(e.target.value as any)}
+                        onChange={(e) => {
+                            setFilterMode(e.target.value as any);
+                            setCurrentPage(1);
+                        }}
                     >
                         <option value="all">All Modes</option>
                         <option value="online">Online</option>
@@ -74,7 +84,7 @@ export default function FacultyPrograms() {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {isLoading ? (
                     <p>Loading programs...</p>
-                ) : filteredPrograms?.map((program) => {
+                ) : pagedPrograms.map((program) => {
                     const enrolled = isEnrolled(program.id);
                     return (
                         <Card key={program.id} className="flex flex-col">
@@ -127,12 +137,20 @@ export default function FacultyPrograms() {
                         </Card>
                     );
                 })}
-                {filteredPrograms?.length === 0 && (
+                {filteredPrograms.length === 0 && (
                     <div className="col-span-full text-center py-12 text-gray-500">
                         No programs found matching your criteria.
                     </div>
                 )}
             </div>
+            {totalPages > 1 && (
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    className="pt-0"
+                />
+            )}
         </div>
     );
 }

@@ -1,6 +1,6 @@
 """Health check routes."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,11 +18,10 @@ async def health_check(session: AsyncSession = Depends(get_session)) -> dict[str
     """
     try:
         await session.execute(text("SELECT 1"))
-        db_status = "connected"
-    except Exception:
-        db_status = "disconnected"
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "error", "database": "disconnected"},
+        ) from exc
 
-    return {
-        "status": "ok",
-        "database": db_status,
-    }
+    return {"status": "ok", "database": "connected"}

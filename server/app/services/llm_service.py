@@ -1,16 +1,18 @@
-
 import json
 import logging
+import re
+from typing import Any, Dict, List, Optional, Type, TypeVar
+from urllib.parse import quote_plus
+
 import httpx
-from typing import List, Dict, Any, Optional, Type, TypeVar
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ValidationError
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
 
-# --- Schemas for Structured Output ---
 
 class QuizQuestion(BaseModel):
     question_id: int
@@ -19,15 +21,18 @@ class QuizQuestion(BaseModel):
     correct_answer: str
     marks: int
 
+
 class QuizMetadata(BaseModel):
     topic: str
     difficulty: str
     total_questions: int
     marks_per_question: int
 
+
 class QuizResponse(BaseModel):
     metadata: QuizMetadata
     quiz: List[QuizQuestion]
+
 
 class SkillGapAnalysis(BaseModel):
     strength: str
@@ -36,8 +41,10 @@ class SkillGapAnalysis(BaseModel):
     recommendations: List[str]
     next_difficulty: str
 
+
 class SkillGapResponse(BaseModel):
     analysis: SkillGapAnalysis
+
 
 class RoadmapWeekAI(BaseModel):
     week_number: int
@@ -46,8 +53,10 @@ class RoadmapWeekAI(BaseModel):
     required_min_avg_score: float
     tasks: List[str]
 
+
 class RoadmapAI(BaseModel):
     weeks: List[RoadmapWeekAI]
+
 
 class PracticeQuestionAI(BaseModel):
     question_text: str
@@ -58,20 +67,25 @@ class PracticeQuestionAI(BaseModel):
     correct_option: str
     explanation: str
 
+
 class PracticeQuestionResponseAI(BaseModel):
     questions: List[PracticeQuestionAI]
+
 
 class SkillSuggestionsAI(BaseModel):
     suggested_skills: List[str]
     reasoning: str
 
+
 class ChatMessage(BaseModel):
-    role: str  # "user" or "assistant"
+    role: str
     content: str
+
 
 class LearningRoadmapResourceAI(BaseModel):
     title: str
     url: str
+
 
 class LearningRoadmapWeekAI(BaseModel):
     week: int
@@ -80,10 +94,10 @@ class LearningRoadmapWeekAI(BaseModel):
     resources: List[LearningRoadmapResourceAI] = []
     practice: List[str] = []
 
+
 class LearningRoadmapAI(BaseModel):
     weekly_plan: List[LearningRoadmapWeekAI]
 
-# --- LLM Service ---
 
 class LLMService:
     def __init__(self):
@@ -93,99 +107,340 @@ class LLMService:
         self.timeout = httpx.Timeout(settings.LLM_TIMEOUT_SECONDS)
         self.max_retries = settings.LLM_MAX_RETRIES
 
+    def _remote_enabled(self) -> bool:
+        return bool(self.api_key)
+
+    def _extract_keywords(self, text: str, fallback: Optional[List[str]] = None) -> List[str]:
+        chunks = re.split(r"[\n,;|]+", text or "")
+        words: List[str] = []
+        for chunk in chunks:
+            normalized = re.sub(r"\s+", " ", chunk).strip(" .:-")
+            if normalized:
+                words.append(normalized)
+        if not words and fallback:
+            words = fallback[:]
+        deduped: List[str] = []
+        for word in words:
+            if word not in deduped:
+                deduped.append(word)
+        return deduped[:8] or ["core concepts"]
+
+    def _difficulty_label(self, difficulty: str) -> str:
+        normalized = (difficulty or "").strip().lower()
+        if normalized in {"easy", "beginner"}:
+            return "Easy"
+        if normalized in {"hard", "advanced"}:
+            return "Hard"
+        return "Medium"
+
+    def _difficulty_target(self, difficulty: str) -> str:
+        label = self._difficulty_label(difficulty)
+        if label == "Easy":
+            return "75%"
+        if label == "Hard":
+            return "65%"
+        return "70%"
+
     async def _call_llm(self, prompt: str, system_prompt: str = "") -> Optional[str]:
-        """Base method to call OpenRouter with retries and guardrails."""
-        if not self.api_key:
-            logger.error("OpenRouter API key not configured")
+        if not self._remote_enabled():
+            logger.info("OpenRouter API key not configured. Using deterministic local fallback.")
             return None
 
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             "temperature": 0.3,
-            "response_format": {"type": "json_object"}
+            "response_format": {"type": "json_object"},
         }
-
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/SanjayMuthuswamy/Faculty-Skill-Development-Portal", # Required by OpenRouter
-            "X-Title": "Faculty Skill Development Portal"
+            "HTTP-Referer": "https://github.com/SanjayMuthuswamy/Faculty-Skill-Development-Portal",
+            "X-Title": "Faculty Skill Development Portal",
         }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             for attempt in range(self.max_retries + 1):
                 try:
-                    logger.info(f"--- [AI] Sending Prompt to OpenRouter ({self.model}) [Attempt {attempt + 1}] ---")
                     response = await client.post(self.base_url, json=payload, headers=headers)
                     response.raise_for_status()
                     data = response.json()
-                    
-                    if "choices" in data and len(data["choices"]) > 0:
-                        content = data["choices"][0]["message"]["content"]
-                        logger.info("--- [AI] Successfully received response from OpenRouter ---")
-                        return content
-                    else:
-                        logger.error(f"Unexpected OpenRouter response format: {data}")
-                        return None
-                        
-                except (httpx.HTTPError, json.JSONDecodeError) as e:
-                    logger.warning(f"--- [AI] OpenRouter call attempt {attempt + 1} failed: {str(e)} ---")
+                    if data.get("choices"):
+                        return data["choices"][0]["message"]["content"]
+                    logger.error("Unexpected OpenRouter response format: %s", data)
+                    return None
+                except (httpx.HTTPError, json.JSONDecodeError) as exc:
+                    logger.warning("OpenRouter call attempt %s failed: %s", attempt + 1, exc)
                     if attempt == self.max_retries:
-                        logger.error("--- [AI] OpenRouter exhausted all retries. ---")
+                        logger.error("OpenRouter exhausted all retries.")
                         return None
         return None
 
     def _validate_json(self, raw_response: str, schema: Type[T]) -> Optional[T]:
-        """Strict JSON schema validation."""
         try:
-            # Sometime LLMs wrap JSON in backticks or have extra text
             cleaned = raw_response.strip()
             if cleaned.startswith("```json"):
                 cleaned = cleaned[7:]
             if cleaned.endswith("```"):
                 cleaned = cleaned[:-3]
-            
-            data = json.loads(cleaned)
-            return schema.model_validate(data)
-        except (json.JSONDecodeError, ValidationError) as e:
-            logger.error(f"JSON Validation failed: {str(e)}\nRaw Response: {raw_response}")
+            return schema.model_validate(json.loads(cleaned))
+        except (json.JSONDecodeError, ValidationError) as exc:
+            logger.error("JSON validation failed: %s\nRaw Response: %s", exc, raw_response)
             return None
 
-    async def generate_quiz(self, topic: str, difficulty: str, num_questions: int, marks: int) -> Optional[QuizResponse]:
-        """Generates a structured quiz using the Enterprise prompt framework."""
-        system_prompt = (
-            "You are an academic assessment generation engine designed for structured enterprise learning platforms. "
-            "Your responsibility is to generate high-quality, non-repetitive multiple choice questions strictly in valid JSON format. "
-            "Internal Prompt Refinement: Redesign the question flow for maximum conceptual clarity without exposing this thought process."
+    def _fallback_quiz(self, topic: str, difficulty: str, num_questions: int, marks: int) -> QuizResponse:
+        keywords = self._extract_keywords(topic, fallback=[topic or "the topic"])
+        label = self._difficulty_label(difficulty)
+        stems = [
+            "Which statement best describes {keyword} in the context of {topic}?",
+            "What is the most practical objective of {keyword}?",
+            "Which approach most directly improves outcomes for {keyword}?",
+            "Which indicator suggests good understanding of {keyword}?",
+        ]
+        quiz: List[QuizQuestion] = []
+        for index in range(num_questions):
+            keyword = keywords[index % len(keywords)]
+            stem = stems[index % len(stems)].format(keyword=keyword, topic=topic or keyword)
+            correct = f"It applies the core principles of {keyword} in a structured way."
+            options = {
+                "A": correct,
+                "B": f"It ignores feedback and skips validation for {keyword}.",
+                "C": f"It treats {keyword} as a one-time activity with no iteration.",
+                "D": f"It replaces all planning with assumptions about {keyword}.",
+            }
+            quiz.append(
+                QuizQuestion(
+                    question_id=index + 1,
+                    question=stem,
+                    options=options,
+                    correct_answer="A",
+                    marks=marks,
+                )
+            )
+        return QuizResponse(
+            metadata=QuizMetadata(
+                topic=topic,
+                difficulty=label,
+                total_questions=num_questions,
+                marks_per_question=marks,
+            ),
+            quiz=quiz,
         )
 
+    def _fallback_analysis(self, report_data: Dict[str, Any]) -> SkillGapResponse:
+        percentage = float(report_data.get("percentage") or 0.0)
+        incorrect_questions = report_data.get("incorrect_questions") or []
+        gaps = [
+            q.get("question", "concept review").split("?")[0][:80]
+            for q in incorrect_questions[:3]
+            if q.get("question")
+        ] or ["accuracy under timed conditions", "topic recall"]
+
+        if percentage >= 80:
+            strength = "Strong conceptual accuracy with consistent performance."
+            weakness = "Only minor refinement is needed on a few missed items."
+            next_difficulty = "Hard"
+        elif percentage >= 60:
+            strength = "Core understanding is present across the assessed topic."
+            weakness = "Application speed and precision need reinforcement."
+            next_difficulty = "Medium"
+        else:
+            strength = "There is a usable baseline to build from."
+            weakness = "Fundamentals and question interpretation need immediate review."
+            next_difficulty = "Easy"
+
+        recommendations = [
+            "Review missed questions and rewrite the correct reasoning in your own words.",
+            "Complete one focused practice set on the weakest area before the next attempt.",
+            "Take a timed retest after revising the core concepts.",
+        ]
+
+        return SkillGapResponse(
+            analysis=SkillGapAnalysis(
+                strength=strength,
+                weakness=weakness,
+                skill_gaps=gaps,
+                recommendations=recommendations,
+                next_difficulty=next_difficulty,
+            )
+        )
+
+    def _fallback_roadmap(
+        self,
+        skill: str,
+        domain: str,
+        current_level: int,
+        target_level: int,
+        weekly_hours: int,
+    ) -> RoadmapAI:
+        focus_terms = self._extract_keywords(skill, fallback=[skill, domain])
+        weeks: List[RoadmapWeekAI] = []
+        for week_number in range(1, 5):
+            focus = focus_terms[(week_number - 1) % len(focus_terms)]
+            weeks.append(
+                RoadmapWeekAI(
+                    week_number=week_number,
+                    title=f"Week {week_number}: {focus} for {skill}",
+                    required_practice_count=max(1, min(3, weekly_hours // 2 or 1)),
+                    required_min_avg_score=60.0 + (week_number * 5),
+                    tasks=[
+                        f"Review the fundamentals of {focus} for 60 minutes.",
+                        f"Practice one applied exercise related to {focus} in {domain}.",
+                        f"Document two takeaways that move you from level {current_level} toward {target_level}.",
+                    ],
+                )
+            )
+        return RoadmapAI(weeks=weeks)
+
+    def _fallback_practice_questions(self, topic: str, difficulty: str, count: int) -> PracticeQuestionResponseAI:
+        quiz = self._fallback_quiz(topic, difficulty, count, marks=1)
+        questions = [
+            PracticeQuestionAI(
+                question_text=item.question,
+                option_a=item.options["A"],
+                option_b=item.options["B"],
+                option_c=item.options["C"],
+                option_d=item.options["D"],
+                correct_option=item.correct_answer,
+                explanation=f"The best answer is A because it reflects a sound practice for {topic}.",
+            )
+            for item in quiz.quiz
+        ]
+        return PracticeQuestionResponseAI(questions=questions)
+
+    def _fallback_skill_suggestions(self, current_skills: List[str], department: str) -> SkillSuggestionsAI:
+        department_text = (department or "").lower()
+        catalog = [
+            "Data-informed teaching",
+            "Assessment design",
+            "AI-assisted productivity",
+            "Research communication",
+            "Learning analytics",
+            "Instructional design",
+        ]
+        if "computer" in department_text or "it" in department_text:
+            catalog = [
+                "Cloud architecture",
+                "Prompt engineering",
+                "Applied machine learning",
+                "API design",
+                "Cybersecurity awareness",
+            ]
+        elif "management" in department_text or "business" in department_text:
+            catalog = [
+                "Strategic planning",
+                "Business analytics",
+                "Stakeholder communication",
+                "Digital transformation",
+                "Leadership coaching",
+            ]
+
+        suggestions = [skill for skill in catalog if skill not in current_skills][:4]
+        if not suggestions:
+            suggestions = catalog[:4]
+        return SkillSuggestionsAI(
+            suggested_skills=suggestions,
+            reasoning=(
+                f"These suggestions complement the current profile for {department or 'the department'} "
+                "and can be adopted without depending on external AI configuration."
+            ),
+        )
+
+    def _fallback_learning_roadmap(
+        self,
+        skill: str,
+        weeks: int,
+        hours_per_week: int,
+        current_level: str,
+    ) -> LearningRoadmapAI:
+        plan: List[LearningRoadmapWeekAI] = []
+        focus_terms = self._extract_keywords(skill, fallback=[skill])
+        for week in range(1, weeks + 1):
+            focus = focus_terms[(week - 1) % len(focus_terms)]
+            plan.append(
+                LearningRoadmapWeekAI(
+                    week=week,
+                    goals=[
+                        f"Understand the core workflow of {focus}.",
+                        f"Apply {focus} in one practical exercise at {current_level} level.",
+                    ],
+                    topics=[focus, f"{skill} fundamentals", "review and reflection"],
+                    resources=[
+                        LearningRoadmapResourceAI(
+                            title=f"Search resources for {focus}",
+                            url=f"https://www.google.com/search?q={quote_plus(focus + ' tutorial')}",
+                        ),
+                        LearningRoadmapResourceAI(
+                            title=f"Reference material for {skill}",
+                            url=f"https://www.google.com/search?q={quote_plus(skill + ' documentation')}",
+                        ),
+                    ],
+                    practice=[
+                        f"TEST: Attempt a 15-question quiz on {focus}; target >= {self._difficulty_target(current_level)}",
+                        f"BUILD: Create one small artifact that demonstrates {focus} in practice.",
+                        f"REVIEW: Summarize the week's progress and note 3 improvement points.",
+                    ],
+                )
+            )
+        return LearningRoadmapAI(weekly_plan=plan)
+
+    def _fallback_chat(self, user_message: str, performance_context: Dict[str, Any]) -> str:
+        total_tests = performance_context.get("total_tests", 0)
+        avg_accuracy = float(performance_context.get("avg_accuracy", 0) or 0)
+        weak_topics = performance_context.get("weak_topics", []) or []
+        strong_topics = performance_context.get("strong_topics", []) or []
+
+        if total_tests == 0:
+            return (
+                "You do not have completed tests yet.\n"
+                "- Take one baseline test first.\n"
+                "- After that, I can point out weak areas and study priorities.\n"
+                "- Start with a beginner or medium test in your main domain."
+            )
+
+        weak_line = weak_topics[0]["topic"] if weak_topics else "no major weak topic recorded"
+        strong_line = strong_topics[0]["topic"] if strong_topics else "no strong topic recorded yet"
+        recommendation = "revise fundamentals and retake a focused test" if avg_accuracy < 70 else "move to timed practice and advanced topics"
+        return (
+            f"Based on your current performance ({avg_accuracy:.1f}% average across {total_tests} tests):\n"
+            f"- Strongest area: {strong_line}\n"
+            f"- Main area to improve: {weak_line}\n"
+            f"- Next step: {recommendation}\n"
+            "- Keep practice targeted and review every missed question."
+        )
+
+    def _fallback_course_feedback(self, wrong_questions: List[str], course_title: str) -> Dict[str, Any]:
+        weak_areas = [
+            question.split("?")[0][:80]
+            for question in wrong_questions[:3]
+            if question
+        ] or [f"{course_title} fundamentals"]
+        return {
+            "weak_areas": weak_areas,
+            "suggestions": [
+                f"Review the key concepts from {course_title} that relate to the missed questions.",
+                "Reattempt a smaller practice set on the weak areas before the next final assessment.",
+                "Write short notes for each incorrect answer to reinforce the correct logic.",
+            ],
+        }
+
+    async def generate_quiz(self, topic: str, difficulty: str, num_questions: int, marks: int) -> Optional[QuizResponse]:
+        if not self._remote_enabled():
+            return self._fallback_quiz(topic, difficulty, num_questions, marks)
+
+        system_prompt = (
+            "You are an academic assessment generation engine designed for structured enterprise learning platforms. "
+            "Your responsibility is to generate high-quality, non-repetitive multiple choice questions strictly in valid JSON format."
+        )
         prompt = f"""
 INPUT PARAMETERS:
 - topic: {topic}
 - difficulty: {difficulty}
 - number_of_questions: {num_questions}
 - marks_per_question: {marks}
-
-Difficulty Meaning:
-Easy -> fundamental concepts, definitions
-Medium -> applied understanding, scenario-based
-Hard -> analytical, conceptual depth, edge cases
-
-Strict Requirements:
-1. Generate exactly {num_questions} questions.
-2. Each question must have exactly 4 options: A, B, C, D.
-3. Only one correct_answer.
-4. Do NOT include explanations.
-5. Do NOT include markdown.
-6. Do NOT include commentary outside JSON.
-7. Avoid ambiguity.
-8. Avoid duplicate question intent.
-9. Ensure factual correctness.
-10. Validate JSON internally before responding.
 
 Output JSON structure ONLY:
 {{
@@ -213,292 +468,131 @@ Output JSON structure ONLY:
 """
         raw = await self._call_llm(prompt, system_prompt)
         if not raw:
-            return None
-            
-        return self._validate_json(raw, QuizResponse)
+            return self._fallback_quiz(topic, difficulty, num_questions, marks)
+        return self._validate_json(raw, QuizResponse) or self._fallback_quiz(topic, difficulty, num_questions, marks)
 
     async def analyze_performance(self, report_data: Dict[str, Any]) -> Optional[SkillGapResponse]:
-        """Analyzes performance data to identify skill gaps."""
+        if not self._remote_enabled():
+            return self._fallback_analysis(report_data)
+
         system_prompt = (
             "You are a performance analysis assistant for an educational assessment platform. "
             "Analyze weaknesses, strengths, and skill gaps logically from the provided report."
         )
-
         prompt = f"""
 Respond strictly in valid JSON format.
 
-Analyze the following structured performance report.
-Do not calculate marks. Marks are already computed.
-
-Input Report:
+Analyze the following structured performance report:
 {json.dumps(report_data, indent=2)}
-
-Provide:
-1. Strength summary
-2. Weakness summary
-3. Skill gap identification
-4. 3 actionable improvement steps
-5. Recommended difficulty level for next quiz (Easy/Medium/Hard)
-
-Respond in structured JSON structure ONLY:
-{{
-  "analysis": {{
-    "strength": "string",
-    "weakness": "string",
-    "skill_gaps": ["string"],
-    "recommendations": ["string"],
-    "next_difficulty": "Easy/Medium/Hard"
-  }}
-}}
 """
         raw = await self._call_llm(prompt, system_prompt)
         if not raw:
-            return None
-            
-        return self._validate_json(raw, SkillGapResponse)
+            return self._fallback_analysis(report_data)
+        return self._validate_json(raw, SkillGapResponse) or self._fallback_analysis(report_data)
 
-    async def generate_roadmap(self, skill: str, domain: str, current_level: int, target_level: int, weekly_hours: int) -> Optional[RoadmapAI]:
-        """Generates a structured 4-week roadmap using Ollama."""
+    async def generate_roadmap(
+        self,
+        skill: str,
+        domain: str,
+        current_level: int,
+        target_level: int,
+        weekly_hours: int,
+    ) -> Optional[RoadmapAI]:
+        if not self._remote_enabled():
+            return self._fallback_roadmap(skill, domain, current_level, target_level, weekly_hours)
+
         system_prompt = (
-            "You are an academic curriculum designer. Your goal is to create a structured, 4-week skill development roadmap "
-            "for a faculty member. The roadmap must be pedagogically sound and realistic given the weekly time commitment."
+            "You are an academic curriculum designer. Create a realistic four-week roadmap "
+            "for a faculty member with practical and measurable tasks."
         )
-
         prompt = f"""
-INPUT PARAMETERS:
-- Skill: {skill}
-- Domain: {domain}
-- Current Proficiency: {current_level}/10
-- Target Proficiency: {target_level}/10
-- Weekly Commitment: {weekly_hours} hours
-
-Requirements:
-1. Generate exactly 4 weeks.
-2. Each week must have a title and 3-4 specific, actionable tasks.
-3. Suggest required_practice_count (number of tests to take) and required_min_avg_score (%) for each week.
-4. Output strictly in JSON format.
-
-Output JSON structure ONLY:
-{{
-  "weeks": [
-    {{
-      "week_number": 1,
-      "title": "Fundamental Concepts of ...",
-      "required_practice_count": 3,
-      "required_min_avg_score": 65.0,
-      "tasks": [
-        "Actionable task 1",
-        "Actionable task 2",
-        "Actionable task 3"
-      ]
-    }},
-    ...
-  ]
-}}
+Skill: {skill}
+Domain: {domain}
+Current Level: {current_level}
+Target Level: {target_level}
+Weekly Hours: {weekly_hours}
 """
         raw = await self._call_llm(prompt, system_prompt)
         if not raw:
-            return None
-            
-        return self._validate_json(raw, RoadmapAI)
+            return self._fallback_roadmap(skill, domain, current_level, target_level, weekly_hours)
+        return self._validate_json(raw, RoadmapAI) or self._fallback_roadmap(skill, domain, current_level, target_level, weekly_hours)
 
     async def generate_practice_questions(self, topic: str, difficulty: str, count: int) -> Optional[PracticeQuestionResponseAI]:
-        """Generates a list of MCQs for practice using Ollama."""
-        system_prompt = (
-            "You are an expert examiner in professional development. Your task is to generate high-quality "
-            "multiple-choice questions (MCQs) for a faculty member. Ensure the questions are accurate and relevant."
-        )
+        if not self._remote_enabled():
+            return self._fallback_practice_questions(topic, difficulty, count)
 
-        prompt = f"""
-INPUT PARAMETERS:
-- Topic: {topic}
-- Difficulty: {difficulty}
-- Count: {count}
-
-Requirements:
-1. Generate exactly {count} MCQs.
-2. Each question must have 4 options (A, B, C, D).
-3. Provide a clear, detailed explanation for the correct answer.
-4. Output strictly in JSON format.
-
-Output JSON structure ONLY:
-{{
-  "questions": [
-    {{
-      "question_text": "string",
-      "option_a": "string",
-      "option_b": "string",
-      "option_c": "string",
-      "option_d": "string",
-      "correct_option": "A",
-      "explanation": "string"
-    }},
-    ...
-  ]
-}}
-"""
+        system_prompt = "Generate multiple choice practice questions in strict JSON."
+        prompt = f"Topic: {topic}\nDifficulty: {difficulty}\nCount: {count}"
         raw = await self._call_llm(prompt, system_prompt)
         if not raw:
-            return None
-            
-        return self._validate_json(raw, PracticeQuestionResponseAI)
+            return self._fallback_practice_questions(topic, difficulty, count)
+        return self._validate_json(raw, PracticeQuestionResponseAI) or self._fallback_practice_questions(topic, difficulty, count)
 
     async def suggest_skills(self, current_skills: List[str], department: str) -> Optional[SkillSuggestionsAI]:
-        """Suggests new skills to learn based on current profile."""
-        system_prompt = (
-            "You are a professional development coach for higher education faculty. "
-            "Suggest relevant, modern skills that would complement the faculty member's current expertise."
-        )
+        if not self._remote_enabled():
+            return self._fallback_skill_suggestions(current_skills, department)
 
-        prompt = f"""
-FACULTY PROFILE:
-- Department: {department}
-- Current Skills: {", ".join(current_skills) if current_skills else "None listed"}
-
-Requirements:
-1. Suggest 3-5 complementary or emerging skills.
-2. Provide a brief reasoning for these suggestions.
-3. Output strictly in JSON format.
-
-Output JSON structure ONLY:
-{{
-  "suggested_skills": ["string"],
-  "reasoning": "string"
-}}
-"""
+        system_prompt = "Suggest complementary faculty development skills in strict JSON."
+        prompt = f"Department: {department}\nCurrent Skills: {', '.join(current_skills)}"
         raw = await self._call_llm(prompt, system_prompt)
         if not raw:
-            return None
-            
-        return self._validate_json(raw, SkillSuggestionsAI)
+            return self._fallback_skill_suggestions(current_skills, department)
+        return self._validate_json(raw, SkillSuggestionsAI) or self._fallback_skill_suggestions(current_skills, department)
 
     async def generate_learning_roadmap(
-        self, skill: str, weeks: int, hours_per_week: int, current_level: str = "beginner"
+        self,
+        skill: str,
+        weeks: int,
+        hours_per_week: int,
+        current_level: str = "beginner",
     ) -> Optional[LearningRoadmapAI]:
-        """Generates a detailed, variable-length learning roadmap with resources."""
-        system_prompt = (
-            "You are an expert curriculum designer. Create a structured, week-by-week learning roadmap "
-            "for a professional who wants to master a skill. Each week must include specific goals, "
-            "topics, learning resources (with real URLs), and practice exercises. "
-            "Be realistic about what can be accomplished given the weekly hours."
-        )
+        if not self._remote_enabled():
+            return self._fallback_learning_roadmap(skill, weeks, hours_per_week, current_level)
 
-        prompt = f"""
-INPUT PARAMETERS:
-- Skill to learn: {skill}
-- Current proficiency level: {current_level}
-- Total weeks: {weeks}
-- Hours per week: {hours_per_week}
-
-IMPORTANT: The learner is at '{current_level}' level. Tailor content accordingly:
-- beginner: Start from scratch with fundamentals, simple exercises, basic terminology.
-- intermediate: Skip basics, focus on applied skills, patterns, and real-world projects.
-- advanced: Deep dives, architecture, optimization, cutting-edge topics, complex projects.
-
-Requirements:
-1. Generate exactly {weeks} weeks.
-2. Each week must include:
-   - goals: 2-3 specific, measurable learning goals
-   - topics: 2-4 core topics to study
-   - resources: 2-3 learning resources with title and URL (use real documentation / tutorial URLs)
-   - practice: 4-6 action items with these prefixes:
-     - at least 1 item starting with "TEST:" (timed practice test with target score)
-     - at least 1 item starting with "BUILD:" (artifact/implementation work)
-     - at least 1 item starting with "REVIEW:" (non-common requirement: peer review, benchmark, reflection, or teach-back)
-3. Make progression logical (basics first, advanced later).
-4. Output strictly in JSON format with NO additional text.
-5. Avoid generic items like "practice more" or "read docs". Every item must be concrete and measurable.
-
-Output JSON structure ONLY:
-{{
-  "weekly_plan": [
-    {{
-      "week": 1,
-      "goals": ["Understand core concepts of {skill}", "Set up development environment"],
-      "topics": ["Introduction to {skill}", "Core terminology"],
-      "resources": [
-        {{"title": "Official Documentation", "url": "https://example.com/docs"}},
-        {{"title": "Beginner Tutorial", "url": "https://example.com/tutorial"}}
-      ],
-      "practice": [
-        "TEST: Attempt a 20-question timed quiz on core concepts; target >= 75%",
-        "BUILD: Create and run a minimal working project covering this week's topics",
-        "REVIEW: Record a 5-minute teach-back summary and capture 3 improvement points"
-      ]
-    }}
-  ]
-}}
-"""
+        system_prompt = "Create a week-by-week learning roadmap in strict JSON."
+        prompt = f"Skill: {skill}\nWeeks: {weeks}\nHours per week: {hours_per_week}\nCurrent level: {current_level}"
         raw = await self._call_llm(prompt, system_prompt)
         if not raw:
-            return None
-
-        return self._validate_json(raw, LearningRoadmapAI)
+            return self._fallback_learning_roadmap(skill, weeks, hours_per_week, current_level)
+        return self._validate_json(raw, LearningRoadmapAI) or self._fallback_learning_roadmap(skill, weeks, hours_per_week, current_level)
 
     async def chat_with_coach(
         self,
         user_message: str,
         conversation_history: List[Dict[str, str]],
-        performance_context: Dict[str, Any]
+        performance_context: Dict[str, Any],
     ) -> Optional[str]:
-        """Interactive AI coach chat using performance data as context."""
-        if not self.api_key:
-            logger.error("OpenRouter API key not configured")
-            return None
+        if not self._remote_enabled():
+            return self._fallback_chat(user_message, performance_context)
 
-        # Build a rich system prompt from the faculty's performance data
         total_tests = performance_context.get("total_tests", 0)
         avg_accuracy = performance_context.get("avg_accuracy", 0)
         weak_topics = performance_context.get("weak_topics", [])
         strong_topics = performance_context.get("strong_topics", [])
         recent_tests = performance_context.get("recent_tests", [])
-        no_data = total_tests == 0
-
-        if no_data:
-            context_block = "The faculty member has not completed any tests yet. Encourage them to take a test to get personalized insights."
+        if total_tests == 0:
+            context_block = "The faculty member has not completed any tests yet."
         else:
-            weak_str = ", ".join([f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in weak_topics]) if weak_topics else "None identified"
-            strong_str = ", ".join([f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in strong_topics]) if strong_topics else "None identified"
-            recent_str = "; ".join([f"{t['title']} scored {t['accuracy']:.0f}%" for t in recent_tests[:3]]) if recent_tests else "No recent tests"
+            weak_str = ", ".join(f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in weak_topics) if weak_topics else "None"
+            strong_str = ", ".join(f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in strong_topics) if strong_topics else "None"
+            recent_str = "; ".join(f"{t['title']} scored {t['accuracy']:.0f}%" for t in recent_tests[:3]) if recent_tests else "No recent tests"
+            context_block = (
+                f"Total tests: {total_tests}\n"
+                f"Average accuracy: {avg_accuracy:.1f}%\n"
+                f"Weak topics: {weak_str}\n"
+                f"Strong topics: {strong_str}\n"
+                f"Recent activity: {recent_str}"
+            )
 
-            context_block = f"""
-Faculty Performance Summary:
-- Total tests completed: {total_tests}
-- Overall average accuracy: {avg_accuracy:.1f}%
-- Weak topics (accuracy < 70%): {weak_str}
-- Strong topics (accuracy >= 70%): {strong_str}
-- Recent activity: {recent_str}
-"""
-
-        system_prompt = f"""You are an AI learning coach for the Faculty Skill Development Portal. \
-You help faculty members understand their performance, identify weak areas, and improve their skills through personalized guidance.
-
-{context_block}
-
-Guidelines:
-- Be concise, encouraging, and specific. Use bullet points for lists.
-- Always ground your answers in the performance data above.
-- If asked about weak topics, reference the specific topics and their accuracy scores.
-- If asked for study recommendations, suggest practical next steps.
-- If no data is available, encourage the faculty member to take a test first.
-- Keep responses under 250 words unless asked for a detailed plan."""
-
-        # Build message list: system + history + current user message
-        messages = [{"role": "system", "content": system_prompt}]
-        for msg in conversation_history:
-            messages.append({"role": msg["role"], "content": msg["content"]})
+        messages = [{"role": "system", "content": context_block}]
+        messages.extend(conversation_history)
         messages.append({"role": "user", "content": user_message})
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": 0.5,
-        }
+        payload = {"model": self.model, "messages": messages, "temperature": 0.5}
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://github.com/SanjayMuthuswamy/Faculty-Skill-Development-Portal",
-            "X-Title": "Faculty Skill Development Portal"
+            "X-Title": "Faculty Skill Development Portal",
         }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -507,76 +601,52 @@ Guidelines:
                     response = await client.post(self.base_url, json=payload, headers=headers)
                     response.raise_for_status()
                     data = response.json()
-                    if "choices" in data and data["choices"]:
+                    if data.get("choices"):
                         return data["choices"][0]["message"]["content"]
-                    return None
-                except Exception as e:
-                    logger.warning(f"Chat coach attempt {attempt + 1} failed: {e}")
+                    return self._fallback_chat(user_message, performance_context)
+                except Exception as exc:
+                    logger.warning("Chat coach attempt %s failed: %s", attempt + 1, exc)
                     if attempt == self.max_retries:
-                        return None
-        return None
+                        return self._fallback_chat(user_message, performance_context)
+        return self._fallback_chat(user_message, performance_context)
 
-    async def generate_course_feedback(
-        self,
-        wrong_questions: list,
-        course_title: str
-    ) -> dict | None:
-        """Generate AI feedback identifying weak areas after a course assessment."""
-        if not self.api_key:
-            return None
+    async def generate_course_feedback(self, wrong_questions: list, course_title: str) -> Optional[dict]:
+        if not self._remote_enabled():
+            return self._fallback_course_feedback(wrong_questions, course_title)
         if not wrong_questions:
             return {"weak_areas": [], "suggestions": ["Excellent work! You answered all questions correctly."]}
-
-        prompt = f"""
-A faculty member just completed the final assessment for the course: "{course_title}".
-
-They answered the following questions INCORRECTLY:
-{chr(10).join(f"- {q}" for q in wrong_questions[:10])}
-
-Based on these incorrect answers, identify:
-1. The 2-4 main weak topic areas
-2. 3-4 specific, actionable improvement suggestions
-
-Respond strictly in this JSON format:
-{{
-  "weak_areas": ["topic 1", "topic 2", "topic 3"],
-  "suggestions": [
-    "Specific suggestion 1",
-    "Specific suggestion 2",
-    "Specific suggestion 3"
-  ]
-}}
-"""
-        system = (
-            "You are an educational assessment analyst. Identify knowledge gaps from incorrect answers "
-            "and provide specific, actionable improvement recommendations. Respond only in JSON."
-        )
 
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "Identify weak areas from missed course assessment questions and respond with JSON only.",
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Course: {course_title}\n"
+                        f"Incorrect questions:\n" + "\n".join(f"- {question}" for question in wrong_questions[:10])
+                    ),
+                },
             ],
             "temperature": 0.3,
-            "response_format": {"type": "json_object"}
+            "response_format": {"type": "json_object"},
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://github.com/SanjayMuthuswamy/Faculty-Skill-Development-Portal",
-            "X-Title": "Faculty Skill Development Portal"
+            "X-Title": "Faculty Skill Development Portal",
         }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(self.base_url, json=payload, headers=headers)
                 response.raise_for_status()
                 data = response.json()
-                if "choices" in data and data["choices"]:
-                    import json as _json
-                    raw = data["choices"][0]["message"]["content"]
-                    return _json.loads(raw)
-            except Exception as e:
-                logger.warning(f"Course feedback generation failed: {e}")
-        return None
-
+                if data.get("choices"):
+                    return json.loads(data["choices"][0]["message"]["content"])
+            except Exception as exc:
+                logger.warning("Course feedback generation failed: %s", exc)
+        return self._fallback_course_feedback(wrong_questions, course_title)

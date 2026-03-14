@@ -1,5 +1,9 @@
 import logging
+from math import ceil
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -11,6 +15,7 @@ from app.api.v1.deps import get_current_user, get_session, require_role
 from app.models.enums import ProgramStatus
 from app.models.user import User, UserRole
 from app.models.program import Program
+from app.core.pagination import get_pagination_bounds
 from app.schemas.program import Program as ProgramSchema, ProgramCreate, ProgramUpdate
 
 router = APIRouter(tags=["programs"])
@@ -45,15 +50,75 @@ def _validate_publishable_program(payload: dict) -> None:
 async def list_programs(
     skip: int = 0,
     limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session)
 ):
-    result = await db.execute(
+    query = (
         select(Program)
         .offset(skip)
         .limit(limit)
         .options(selectinload(Program.enrollments))
     )
+    if current_user.role != UserRole.ADMIN:
+        query = query.where(
+            Program.status.notin_([ProgramStatus.DRAFT, ProgramStatus.ARCHIVED])
+        )
+    result = await db.execute(query)
     return result.scalars().all()
+
+
+@router.get("/paged")
+async def list_programs_paged(
+    page: int = 1,
+    page_size: int = 10,
+    search: Optional[str] = None,
+    status: Optional[ProgramStatus] = None,
+    mode: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    offset, normalized_page, normalized_page_size = get_pagination_bounds(page=page, page_size=page_size)
+
+    base_query = select(Program)
+
+    if current_user.role != UserRole.ADMIN:
+        base_query = base_query.where(Program.status.notin_([ProgramStatus.DRAFT, ProgramStatus.ARCHIVED]))
+    elif status is not None:
+        base_query = base_query.where(Program.status == status)
+
+    if mode:
+        base_query = base_query.where(func.lower(Program.mode) == func.lower(mode))
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        if search_term != "%%":
+            base_query = base_query.where(
+                or_(
+                    func.lower(Program.title).like(func.lower(search_term)),
+                    func.lower(Program.description).like(func.lower(search_term)),
+                    func.lower(Program.mode).like(func.lower(search_term)),
+                )
+            )
+
+    total_stmt = select(func.count()).select_from(base_query.subquery())
+    total = (await db.execute(total_stmt)).scalar_one()
+
+    result = await db.execute(
+        base_query
+        .order_by(Program.created_at.desc())
+        .offset(offset)
+        .limit(normalized_page_size)
+        .options(selectinload(Program.enrollments))
+    )
+    items = result.scalars().all()
+
+    return {
+        "items": items,
+        "total": total,
+        "page": normalized_page,
+        "page_size": normalized_page_size,
+        "total_pages": ceil(total / normalized_page_size) if total else 1,
+    }
 
 @router.post("/", response_model=ProgramSchema)
 async def create_program(
@@ -91,6 +156,7 @@ async def create_program(
 @router.get("/{program_id}", response_model=ProgramSchema)
 async def get_program(
     program_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session)
 ):
     result = await db.execute(
@@ -100,6 +166,9 @@ async def get_program(
     )
     program = result.scalar_one_or_none()
     if not program:
+        raise HTTPException(status_code=404, detail="Program not found")
+    status_value = program.status.value if hasattr(program.status, "value") else program.status
+    if current_user.role != UserRole.ADMIN and status_value in {ProgramStatus.DRAFT.value, ProgramStatus.ARCHIVED.value}:
         raise HTTPException(status_code=404, detail="Program not found")
     return program
 

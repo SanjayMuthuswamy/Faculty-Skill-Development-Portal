@@ -1,6 +1,6 @@
 
-from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -187,6 +187,18 @@ class CourseService:
             await self.db.delete(q)
             await self.db.commit()
 
+    async def get_quiz_question(self, quiz_id: str) -> Optional[ModuleQuiz]:
+        result = await self.db.execute(select(ModuleQuiz).where(ModuleQuiz.id == quiz_id))
+        return result.scalar_one_or_none()
+
+    async def update_quiz_question(self, quiz: ModuleQuiz, data: dict) -> ModuleQuiz:
+        for k, v in data.items():
+            if v is not None:
+                setattr(quiz, k, v)
+        await self.db.commit()
+        await self.db.refresh(quiz)
+        return quiz
+
     # ── Assessment Questions ──────────────────────────────────────────────────
 
     async def add_assessment_question(self, course_id: str, data: dict) -> CourseAssessmentQuestion:
@@ -204,6 +216,30 @@ class CourseService:
         if q:
             await self.db.delete(q)
             await self.db.commit()
+
+    async def get_assessment_question(self, question_id: str) -> Optional[CourseAssessmentQuestion]:
+        result = await self.db.execute(
+            select(CourseAssessmentQuestion).where(CourseAssessmentQuestion.id == question_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def update_assessment_question(
+        self,
+        question: CourseAssessmentQuestion,
+        data: dict,
+    ) -> CourseAssessmentQuestion:
+        for k, v in data.items():
+            if v is not None:
+                setattr(question, k, v)
+        await self.db.commit()
+        await self.db.refresh(question)
+        return question
+
+    async def get_admin_assessment_questions(self, course_id: str) -> List[CourseAssessmentQuestion]:
+        result = await self.db.execute(
+            select(CourseAssessmentQuestion).where(CourseAssessmentQuestion.course_id == course_id)
+        )
+        return result.scalars().all()
 
     # ── Enrollment ────────────────────────────────────────────────────────────
 
@@ -384,7 +420,7 @@ class CourseService:
         answers: Dict[str, str],
         time_taken_seconds: int,
         pass_percent: float = 60.0
-    ) -> CourseAttempt:
+    ) -> Tuple[CourseAttempt, List[str]]:
         question_bank = await self.get_assessment_questions(course_id)
 
         correct_ids: list[str] = []
@@ -400,6 +436,10 @@ class CourseService:
         correct = len(correct_ids)
         score = (correct / total * 100) if total else 0
 
+        submitted_at = datetime.now(timezone.utc)
+        safe_time = max(0, int(time_taken_seconds or 0))
+        started_at = submitted_at - timedelta(seconds=safe_time)
+
         attempt = CourseAttempt(
             faculty_id=faculty_id,
             course_id=course_id,
@@ -407,7 +447,8 @@ class CourseService:
             total_questions=total,
             correct_answers=correct,
             passed=score >= pass_percent,
-            submitted_at=datetime.now(timezone.utc),
+            started_at=started_at,
+            submitted_at=submitted_at,
         )
         self.db.add(attempt)
         await self.db.flush()

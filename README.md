@@ -14,6 +14,17 @@ A production-grade full-stack boilerplate for a Faculty Skill Development Portal
 - **State Management**: TanStack Query for server state, React Context for auth
 - **Form Validation**: React Hook Form + Zod on frontend, Pydantic on backend
 - **Docker Support**: Docker Compose for local development
+## Production Deployment
+
+Production deployment documentation:
+
+- `docs/PRODUCTION_DEPLOYMENT.md`
+
+Run:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+```
 
 ## 🏗️ Project Structure
 

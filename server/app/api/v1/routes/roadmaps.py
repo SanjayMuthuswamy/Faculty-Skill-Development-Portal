@@ -68,6 +68,15 @@ async def generate_roadmap(
             current_level=body.current_level,
         )
         return _map_roadmap(roadmap)
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "errorCode": "ROADMAP_PROVIDER_UNAVAILABLE",
+                "message": str(e),
+                "details": {},
+            },
+        )
     except Exception as e:
         logger.error(f"Roadmap generation failed: {str(e)}")
         logger.error(traceback.format_exc())

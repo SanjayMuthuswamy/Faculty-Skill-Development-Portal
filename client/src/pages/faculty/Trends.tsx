@@ -19,27 +19,30 @@ const PRESET_TOPICS = [
     'Python', 'Deep Learning', 'Natural Language Processing'
 ];
 
+const sanitizeText = (value: string | null | undefined) =>
+    (value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function NewsCard({ article, topic, onClick }: { article: NewsItem; topic: string; onClick: () => void }) {
+    const [imgSrc, setImgSrc] = useState(
+        article.imageUrl || `https://picsum.photos/seed/${encodeURIComponent(`${topic}-${article.id}`)}/640/360`
+    );
+
     return (
         <Card
             className="group hover:shadow-lg transition-all border-none shadow-sm cursor-pointer overflow-hidden flex flex-col"
             onClick={onClick}
         >
-            {article.imageUrl && (
-                <img
-                    src={article.imageUrl}
-                    alt={article.title}
-                    className="h-36 w-full object-cover"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                />
-            )}
-            {!article.imageUrl && (
-                <div className="h-36 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                    <Newspaper className="h-12 w-12 text-white/50 group-hover:scale-110 transition-transform" />
-                </div>
-            )}
+            <img
+                src={imgSrc}
+                alt={article.title}
+                className="h-36 w-full object-cover"
+                onError={() => {
+                    const fallback = `https://picsum.photos/seed/fallback-${encodeURIComponent(article.id)}/640/360`;
+                    if (imgSrc !== fallback) setImgSrc(fallback);
+                }}
+            />
             <CardHeader className="pb-2">
                 <div className="flex justify-between items-start mb-2">
                     <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 text-xs">
@@ -53,7 +56,7 @@ function NewsCard({ article, topic, onClick }: { article: NewsItem; topic: strin
             </CardHeader>
             <CardContent className="flex-1">
                 <p className="text-sm text-gray-500 line-clamp-3">
-                    {article.summary || 'No summary available.'}
+                    {sanitizeText(article.summary) || 'No summary available.'}
                 </p>
                 <div className="mt-4 pt-4 border-t flex justify-between items-center">
                     <span className="text-xs text-gray-400">

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_session
@@ -14,7 +14,10 @@ async def get_news(
 ):
     """Fetch professional trends and resources by topic."""
     service = NewsService(db)
-    return await service.fetch_news(topic)
+    try:
+        return await service.fetch_news(topic)
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
 @router.get("/topics", response_model=list[str])
 async def get_suggested_topics():

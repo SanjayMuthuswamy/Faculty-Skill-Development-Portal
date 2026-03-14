@@ -50,14 +50,6 @@ export default function CourseAnalyticsPage() {
         return Array.isArray(rawAnalytics) ? rawAnalytics : [];
     }, [rawAnalytics]);
 
-    if (isLoading) {
-        return (
-            <div className="flex justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            </div>
-        );
-    }
-
     const totalEnrolled = analytics.reduce((sum: number, c: CourseAnalytics) => sum + toSafeNumber(c?.total_enrolled), 0);
     const totalCompleted = analytics.reduce((sum: number, c: CourseAnalytics) => sum + toSafeNumber(c?.total_completed), 0);
 
@@ -69,20 +61,24 @@ export default function CourseAnalyticsPage() {
         ? analytics.reduce((sum: number, c: CourseAnalytics) => sum + toSafeNumber(c?.completion_rate), 0) / analytics.length
         : 0;
 
-    const enrollmentChartData = useMemo(
-        () =>
-            analytics
-                .map((c: CourseAnalytics) => ({
-                    ...c,
-                    short_title: truncateCourseTitle(c?.course_title, 30),
-                    total_enrolled: toSafeNumber(c?.total_enrolled),
-                    total_completed: toSafeNumber(c?.total_completed),
-                }))
-                .sort((a, b) => b.total_enrolled - a.total_enrolled),
-        [analytics]
-    );
+    const enrollmentChartData = analytics
+        .map((c: CourseAnalytics) => ({
+            ...c,
+            short_title: truncateCourseTitle(c?.course_title, 30),
+            total_enrolled: toSafeNumber(c?.total_enrolled),
+            total_completed: toSafeNumber(c?.total_completed),
+        }))
+        .sort((a, b) => b.total_enrolled - a.total_enrolled);
 
     const barChartHeight = Math.max(300, enrollmentChartData.length * 44);
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">

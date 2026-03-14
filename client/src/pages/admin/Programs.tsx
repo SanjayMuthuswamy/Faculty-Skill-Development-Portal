@@ -13,6 +13,8 @@ import { useForm } from 'react-hook-form';
 import { Plus, Edit2, Trash2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
+import { Pagination } from '../../components/ui/Pagination';
+import { useDebouncedValue } from '../../lib/hooks/useDebouncedValue';
 
 interface ProgramFormData {
     title: string;
@@ -55,10 +57,20 @@ export default function AdminPrograms() {
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProgram, setEditingProgram] = useState<Program | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'ALL' | ProgramStatus>('ALL');
+    const [currentPage, setCurrentPage] = useState(1);
+    const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
+    const ITEMS_PER_PAGE = 10;
 
-    const { data: programs, isLoading } = useQuery({
-        queryKey: ['programs'],
-        queryFn: () => programsApi.listPrograms(),
+    const { data: programsData, isLoading } = useQuery({
+        queryKey: ['programs', currentPage, ITEMS_PER_PAGE, debouncedSearchQuery, statusFilter],
+        queryFn: () => programsApi.listProgramsPaginated({
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            search: debouncedSearchQuery || undefined,
+            status: statusFilter,
+        }),
     });
 
     const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<ProgramFormData>();
@@ -151,6 +163,10 @@ export default function AdminPrograms() {
         setIsModalOpen(true);
     };
 
+    const filteredPrograms = programsData?.items ?? [];
+    const totalPages = programsData?.total_pages ?? 1;
+    const pagedPrograms = filteredPrograms;
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -161,6 +177,32 @@ export default function AdminPrograms() {
                 <Button onClick={handleCreate}>
                     <Plus className="mr-2 h-4 w-4" /> Create Program
                 </Button>
+            </div>
+
+            <div className="rounded-xl border bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-3 md:flex-row">
+                    <Input
+                        placeholder="Search by title, domain, or description..."
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                    />
+                    <select
+                        className="h-10 rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 md:w-56"
+                        value={statusFilter}
+                        onChange={(e) => {
+                            setStatusFilter(e.target.value as 'ALL' | ProgramStatus);
+                            setCurrentPage(1);
+                        }}
+                    >
+                        <option value="ALL">All statuses</option>
+                        {Object.values(ProgramStatus).map((status) => (
+                            <option key={status} value={status}>{status}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
             <Card>
@@ -178,7 +220,7 @@ export default function AdminPrograms() {
                     <TableBody>
                         {isLoading ? (
                             <TableRow><TableCell colSpan={6}>Loading...</TableCell></TableRow>
-                        ) : programs?.map((program) => (
+                        ) : pagedPrograms.map((program) => (
                             <TableRow key={program.id}>
                                 <TableCell className="font-medium">
                                     {program.title}
@@ -216,9 +258,20 @@ export default function AdminPrograms() {
                                 </TableCell>
                             </TableRow>
                         ))}
+                        {!isLoading && pagedPrograms.length === 0 && (
+                            <TableRow><TableCell colSpan={6} className="text-center text-gray-500">No programs found for current filters.</TableCell></TableRow>
+                        )}
                     </TableBody>
                 </Table>
             </Card>
+            {totalPages > 1 && (
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    className="pt-0"
+                />
+            )}
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProgram ? "Edit Program" : "Create New Program"}>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

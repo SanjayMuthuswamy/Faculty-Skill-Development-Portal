@@ -14,6 +14,7 @@ router = APIRouter(tags=["skills"])
 async def list_skills(
     skip: int = 0,
     limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session)
 ):
     result = await db.execute(select(Skill).offset(skip).limit(limit))

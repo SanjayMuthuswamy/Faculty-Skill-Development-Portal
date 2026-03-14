@@ -9,6 +9,8 @@ import { Input } from '../../components/ui/Input';
 import { useToast } from '../../components/ui/Toast';
 import { useForm } from 'react-hook-form';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { Pagination } from '../../components/ui/Pagination';
+import { useDebouncedValue } from '../../lib/hooks/useDebouncedValue';
 
 export default function AdminQuestionBank() {
     const { addToast } = useToast();
@@ -16,10 +18,17 @@ export default function AdminQuestionBank() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
+    const ITEMS_PER_PAGE = 10;
 
-    const { data: questions, isLoading } = useQuery({
-        queryKey: ['admin-global-questions'],
-        queryFn: () => questionPacksApi.listAllQuestions(),
+    const { data: questionsData, isLoading } = useQuery({
+        queryKey: ['admin-global-questions', currentPage, ITEMS_PER_PAGE, debouncedSearchTerm],
+        queryFn: () => questionPacksApi.listAllQuestionsPaginated({
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            search: debouncedSearchTerm || undefined,
+        }),
     });
 
     const { data: packs } = useQuery({
@@ -104,9 +113,9 @@ export default function AdminQuestionBank() {
         setIsModalOpen(true);
     };
 
-    const filteredQuestions = questions?.filter(q =>
-        q.question_text.toLowerCase().includes(searchTerm.toLowerCase())
-    ) || [];
+    const filteredQuestions = questionsData?.items ?? [];
+    const totalPages = questionsData?.total_pages ?? 1;
+    const pagedQuestions = filteredQuestions;
 
     return (
         <div className="space-y-6">
@@ -128,7 +137,10 @@ export default function AdminQuestionBank() {
                         placeholder="Search questions..."
                         className="w-full pl-9 h-9 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setCurrentPage(1);
+                        }}
                     />
                 </div>
                 {/* <Button variant="outline" size="icon"><Filter className="h-4 w-4" /></Button> */}
@@ -141,7 +153,7 @@ export default function AdminQuestionBank() {
                     <div className="text-center py-12 text-gray-500 bg-white rounded-lg border border-dashed">
                         No questions found. Add some questions to get started.
                     </div>
-                ) : filteredQuestions.map((question) => (
+                ) : pagedQuestions.map((question) => (
                     <Card key={question.id}>
                         <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
@@ -182,6 +194,13 @@ export default function AdminQuestionBank() {
                     </Card>
                 ))}
             </div>
+            {totalPages > 1 && (
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                />
+            )}
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingQuestion ? "Edit Question" : "Add New Question"}>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 max-h-[80vh] overflow-y-auto px-1">

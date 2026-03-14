@@ -35,6 +35,14 @@ export interface FacultyQuery {
     updated_at: string;
 }
 
+export interface PaginatedFacultyQueries {
+    items: FacultyQuery[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
 export const forumApi = {
     listDiscussions: (category?: string): Promise<Discussion[]> =>
         http.get('/api/v1/discussions', { params: category ? { category } : {} }).then(r => r.data),
@@ -56,8 +64,15 @@ export const queriesApi = {
     myQueries: (): Promise<FacultyQuery[]> =>
         http.get('/api/v1/queries/mine').then(r => r.data),
 
-    listAll: (status?: string): Promise<FacultyQuery[]> =>
-        http.get('/api/v1/queries', { params: status ? { status } : {} }).then(r => r.data),
+    listAll: (params?: { status?: string; search?: string; page?: number; pageSize?: number }): Promise<PaginatedFacultyQueries> =>
+        http.get('/api/v1/queries', {
+            params: {
+                ...(params?.status ? { status: params.status } : {}),
+                ...(params?.search ? { search: params.search } : {}),
+                ...(params?.page ? { page: params.page } : {}),
+                ...(params?.pageSize ? { page_size: params.pageSize } : {}),
+            }
+        }).then(r => r.data),
 
     updateStatus: (id: string, status: string): Promise<FacultyQuery> =>
         http.patch(`/api/v1/queries/${id}`, { status }).then(r => r.data),

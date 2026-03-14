@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { coursesApi, Course, CourseModule } from '../../lib/api/courses';
+import { coursesApi, Course, CourseModule, ModuleQuiz, AdminAssessmentQuestion } from '../../lib/api/courses';
 import { Plus, Trash2, ChevronDown, ChevronRight, Edit2, Eye, EyeOff, Loader2, X, Save } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useToast } from '../../components/ui/Toast';
 
 type ModalMode = 'course' | 'module' | 'quiz' | 'assessment' | null;
 
@@ -10,6 +11,8 @@ interface ModalState {
     mode: ModalMode;
     courseId?: string;
     moduleId?: string;
+    quizId?: string;
+    assessmentQuestionId?: string;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -41,6 +44,7 @@ const inputCls = "w-full px-3 py-2 rounded-lg border border-slate-200 text-sm fo
 
 export default function CourseManagerPage() {
     const queryClient = useQueryClient();
+    const { addToast } = useToast();
     const [modal, setModal] = useState<ModalState>({ mode: null });
     const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
     const [form, setForm] = useState<Record<string, any>>({});
@@ -52,6 +56,11 @@ export default function CourseManagerPage() {
     const { data: expandedCourseDetails, isFetching: isFetchingExpandedCourse } = useQuery({
         queryKey: ['admin-course-details', expandedCourse],
         queryFn: () => coursesApi.getCourse(expandedCourse as string),
+        enabled: !!expandedCourse,
+    });
+    const { data: expandedAssessmentQuestions = [] } = useQuery({
+        queryKey: ['admin-assessment-questions', expandedCourse],
+        queryFn: () => coursesApi.listAdminAssessmentQuestions(expandedCourse as string),
         enabled: !!expandedCourse,
     });
 
@@ -103,14 +112,68 @@ export default function CourseManagerPage() {
             setModal({ mode: null });
         },
     });
+    const updateQuizMutation = useMutation({
+        mutationFn: ({ courseId, moduleId, quizId, data }: any) => coursesApi.updateQuizQuestion(courseId, moduleId, quizId, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            setModal({ mode: null });
+            addToast('Quiz question updated.', 'success');
+        },
+    });
+    const deleteQuizMutation = useMutation({
+        mutationFn: ({ courseId, moduleId, quizId }: any) => coursesApi.deleteQuizQuestion(courseId, moduleId, quizId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            addToast('Quiz question deleted.', 'success');
+        },
+    });
 
     const addAssessmentMutation = useMutation({
         mutationFn: ({ courseId, data }: any) => coursesApi.addAssessmentQuestion(courseId, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
             queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-assessment-questions'] });
             setModal({ mode: null });
         },
+    });
+    const updateAssessmentMutation = useMutation({
+        mutationFn: ({ courseId, questionId, data }: any) => coursesApi.updateAssessmentQuestion(courseId, questionId, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-assessment-questions'] });
+            setModal({ mode: null });
+            addToast('Assessment question updated.', 'success');
+        },
+    });
+    const deleteAssessmentMutation = useMutation({
+        mutationFn: ({ courseId, questionId }: any) => coursesApi.deleteAssessmentQuestion(courseId, questionId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-assessment-questions'] });
+            addToast('Assessment question deleted.', 'success');
+        },
+    });
+
+    const generateModuleQuizMutation = useMutation({
+        mutationFn: ({ courseId, moduleId, data }: any) => coursesApi.generateModuleQuizQuestions(courseId, moduleId, data),
+        onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            addToast(`Generated ${res.generated_count} quiz question(s)`, 'success');
+            setModal({ mode: null });
+        },
+        onError: () => addToast('AI generation failed for module quiz.', 'error'),
+    });
+
+    const generateAssessmentMutation = useMutation({
+        mutationFn: ({ courseId, data }: any) => coursesApi.generateAssessmentQuestions(courseId, data),
+        onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-assessment-questions'] });
+            addToast(`Generated ${res.generated_count} assessment question(s)`, 'success');
+            setModal({ mode: null });
+        },
+        onError: () => addToast('AI generation failed for assessment.', 'error'),
     });
 
     const openModal = (mode: ModalMode, partial?: Partial<ModalState>, initial?: Record<string, any>) => {
@@ -160,16 +223,95 @@ export default function CourseManagerPage() {
                 data: { ...form, key_takeaways: (form.key_takeaways || '').split('\n').filter(Boolean), order_index: parseInt(form.order_index || '0') }
             });
         } else if (modal.mode === 'quiz' && modal.courseId && modal.moduleId) {
-            addQuizMutation.mutate({
-                courseId: modal.courseId, moduleId: modal.moduleId,
-                data: { ...form, options: { A: form.optA, B: form.optB, C: form.optC, D: form.optD } }
-            });
+            const payload = {
+                question_text: form.question_text,
+                options: { A: form.optA, B: form.optB, C: form.optC, D: form.optD },
+                correct_answer: form.correct_answer,
+                explanation: form.explanation || '',
+            };
+            if (modal.quizId) {
+                updateQuizMutation.mutate({
+                    courseId: modal.courseId,
+                    moduleId: modal.moduleId,
+                    quizId: modal.quizId,
+                    data: payload,
+                });
+            } else {
+                addQuizMutation.mutate({
+                    courseId: modal.courseId,
+                    moduleId: modal.moduleId,
+                    data: payload,
+                });
+            }
         } else if (modal.mode === 'assessment' && modal.courseId) {
-            addAssessmentMutation.mutate({
-                courseId: modal.courseId,
-                data: { ...form, options: { A: form.optA, B: form.optB, C: form.optC, D: form.optD } }
-            });
+            const payload = {
+                question_text: form.question_text,
+                options: { A: form.optA, B: form.optB, C: form.optC, D: form.optD },
+                correct_answer: form.correct_answer,
+                explanation: form.explanation || '',
+            };
+            if (modal.assessmentQuestionId) {
+                updateAssessmentMutation.mutate({
+                    courseId: modal.courseId,
+                    questionId: modal.assessmentQuestionId,
+                    data: payload,
+                });
+            } else {
+                addAssessmentMutation.mutate({
+                    courseId: modal.courseId,
+                    data: payload,
+                });
+            }
         }
+    };
+
+    const handleGenerateWithAI = () => {
+        const payload = {
+            prompt: (form.ai_prompt || '').trim(),
+            count: parseInt(form.ai_count || '5'),
+            difficulty: form.ai_difficulty || 'medium',
+        };
+        if (modal.mode === 'quiz' && modal.courseId && modal.moduleId) {
+            generateModuleQuizMutation.mutate({ courseId: modal.courseId, moduleId: modal.moduleId, data: payload });
+        } else if (modal.mode === 'assessment' && modal.courseId) {
+            generateAssessmentMutation.mutate({ courseId: modal.courseId, data: payload });
+        }
+    };
+
+    const openQuizEditModal = (courseId: string, moduleId: string, quiz: ModuleQuiz) => {
+        openModal(
+            'quiz',
+            { courseId, moduleId, quizId: quiz.id },
+            {
+                question_text: quiz.question_text,
+                optA: quiz.options?.A || '',
+                optB: quiz.options?.B || '',
+                optC: quiz.options?.C || '',
+                optD: quiz.options?.D || '',
+                correct_answer: quiz.correct_answer || 'A',
+                explanation: quiz.explanation || '',
+                ai_count: 5,
+                ai_difficulty: 'medium',
+            },
+        );
+    };
+
+    const openAssessmentEditModal = (courseId: string, question: AdminAssessmentQuestion) => {
+        openModal(
+            'assessment',
+            { courseId, assessmentQuestionId: question.id },
+            {
+                question_text: question.question_text,
+                optA: question.options?.A || '',
+                optB: question.options?.B || '',
+                optC: question.options?.C || '',
+                optD: question.options?.D || '',
+                correct_answer: question.correct_answer || 'A',
+                explanation: question.explanation || '',
+                ai_count: 5,
+                ai_difficulty: 'medium',
+            },
+        );
     };
 
     if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>;
@@ -256,6 +398,7 @@ export default function CourseManagerPage() {
                                                 <p className="text-xs text-slate-400">{mod.quiz_questions?.length ?? 0} quiz questions</p>
                                             </div>
                                             <div className="flex gap-2">
+                                                <button onClick={() => openModal('quiz', { courseId: course.id, moduleId: mod.id }, { ai_count: 5, ai_difficulty: 'medium' })} className="text-xs px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-lg font-medium hover:bg-indigo-200 transition-colors">AI Quiz</button>
                                                 <button onClick={() => openModal('quiz', { courseId: course.id, moduleId: mod.id })} className="text-xs px-2.5 py-1 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition-colors">+ Quiz Q</button>
                                                 <button
                                                     onClick={() => { if (confirm('Delete module?')) deleteModuleMutation.mutate({ courseId: course.id, moduleId: mod.id }); }}
@@ -264,9 +407,65 @@ export default function CourseManagerPage() {
                                             </div>
                                         </div>
                                     ))}
+                                    {modules.flatMap((mod: CourseModule) =>
+                                        (mod.quiz_questions || []).map((quiz: ModuleQuiz) => (
+                                            <div key={quiz.id} className="bg-white rounded-lg border border-slate-200 px-3 py-2 ml-2">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <p className="text-xs text-slate-700">{quiz.question_text}</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <button
+                                                            onClick={() => openQuizEditModal(course.id, mod.id, quiz)}
+                                                            className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400"
+                                                            title="Edit quiz question"
+                                                        ><Edit2 className="h-3.5 w-3.5" /></button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm('Delete quiz question?')) {
+                                                                    deleteQuizMutation.mutate({ courseId: course.id, moduleId: mod.id, quizId: quiz.id });
+                                                                }
+                                                            }}
+                                                            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors text-slate-400 hover:text-red-500"
+                                                            title="Delete quiz question"
+                                                        ><Trash2 className="h-3.5 w-3.5" /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
                                     {!showModuleLoader && !modules.length && (
                                         <p className="text-xs text-slate-400 text-center py-3">No modules yet. Add one above.</p>
                                     )}
+                                    <div className="mt-4 pt-3 border-t border-slate-200 space-y-2">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                                            Assessment Questions ({expandedAssessmentQuestions.length})
+                                        </p>
+                                        {expandedAssessmentQuestions.length === 0 && (
+                                            <p className="text-xs text-slate-400">No assessment questions yet. Use + Assessment Q to add.</p>
+                                        )}
+                                        {expandedAssessmentQuestions.map((question: AdminAssessmentQuestion) => (
+                                            <div key={question.id} className="bg-white rounded-lg border border-slate-200 px-3 py-2">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <p className="text-xs text-slate-700">{question.question_text}</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <button
+                                                            onClick={() => openAssessmentEditModal(course.id, question)}
+                                                            className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400"
+                                                            title="Edit assessment question"
+                                                        ><Edit2 className="h-3.5 w-3.5" /></button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm('Delete assessment question?')) {
+                                                                    deleteAssessmentMutation.mutate({ courseId: course.id, questionId: question.id });
+                                                                }
+                                                            }}
+                                                            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors text-slate-400 hover:text-red-500"
+                                                            title="Delete assessment question"
+                                                        ><Trash2 className="h-3.5 w-3.5" /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -280,7 +479,7 @@ export default function CourseManagerPage() {
                     title={
                         modal.mode === 'course' ? (form.id ? 'Edit Course' : 'Create Course') :
                             modal.mode === 'module' ? 'Add Module' :
-                                modal.mode === 'quiz' ? 'Add Quiz Question' : 'Add Assessment Question'
+                                modal.mode === 'quiz' ? (modal.quizId ? 'Edit Quiz Question' : 'Add Quiz Question') : (modal.assessmentQuestionId ? 'Edit Assessment Question' : 'Add Assessment Question')
                     }
                     onClose={() => setModal({ mode: null })}
                 >
@@ -319,7 +518,57 @@ export default function CourseManagerPage() {
                         </>)}
 
                         {(modal.mode === 'quiz' || modal.mode === 'assessment') && (<>
-                            <FieldGroup label="Question"><textarea className={inputCls} rows={2} value={form.question_text || ''} onChange={e => setForm(p => ({ ...p, question_text: e.target.value }))} placeholder="Question text…" /></FieldGroup>
+                            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 space-y-2">
+                                <p className="text-xs font-bold text-indigo-700 uppercase tracking-wide">Generate with AI</p>
+                                <FieldGroup label="Prompt (what should AI focus on?)">
+                                    <textarea
+                                        className={inputCls}
+                                        rows={2}
+                                        value={form.ai_prompt || ''}
+                                        onChange={e => setForm(p => ({ ...p, ai_prompt: e.target.value }))}
+                                        placeholder="Example: scenario-based questions for beginner faculty"
+                                    />
+                                </FieldGroup>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <FieldGroup label="Question Count">
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={20}
+                                            className={inputCls}
+                                            value={form.ai_count || 5}
+                                            onChange={e => setForm(p => ({ ...p, ai_count: e.target.value }))}
+                                        />
+                                    </FieldGroup>
+                                    <FieldGroup label="Difficulty">
+                                        <select
+                                            className={inputCls}
+                                            value={form.ai_difficulty || 'medium'}
+                                            onChange={e => setForm(p => ({ ...p, ai_difficulty: e.target.value }))}
+                                        >
+                                            <option value="easy">Easy</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="hard">Hard</option>
+                                        </select>
+                                    </FieldGroup>
+                                </div>
+                                <button
+                                    onClick={handleGenerateWithAI}
+                                    disabled={generateModuleQuizMutation.isPending || generateAssessmentMutation.isPending}
+                                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-colors"
+                                >
+                                    {generateModuleQuizMutation.isPending || generateAssessmentMutation.isPending ? 'Generating...' : 'Generate Questions with AI'}
+                                </button>
+                            </div>
+
+                            <div className="relative py-1">
+                                <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-slate-200" />
+                                </div>
+                                <div className="relative flex justify-center text-[10px] uppercase tracking-wider text-slate-400 bg-white px-2">or add manually</div>
+                            </div>
+
+                            <FieldGroup label="Question"><textarea className={inputCls} rows={2} value={form.question_text || ''} onChange={e => setForm(p => ({ ...p, question_text: e.target.value }))} placeholder="Question text..." /></FieldGroup>
                             {['A', 'B', 'C', 'D'].map(opt => (
                                 <FieldGroup key={opt} label={`Option ${opt}`}>
                                     <input className={inputCls} value={form[`opt${opt}`] || ''} onChange={e => setForm(p => ({ ...p, [`opt${opt}`]: e.target.value }))} placeholder={`Option ${opt}`} />
@@ -332,12 +581,11 @@ export default function CourseManagerPage() {
                             </FieldGroup>
                             <FieldGroup label="Explanation (optional)"><input className={inputCls} value={form.explanation || ''} onChange={e => setForm(p => ({ ...p, explanation: e.target.value }))} placeholder="Explain the correct answer" /></FieldGroup>
                         </>)}
-
                         <button
                             onClick={handleSubmit}
                             className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
                         >
-                            <Save className="h-4 w-4" /> Save
+                            <Save className="h-4 w-4" /> {modal.quizId || modal.assessmentQuestionId || form.id ? 'Update' : 'Save'}
                         </button>
                     </div>
                 </Modal>
@@ -345,3 +593,5 @@ export default function CourseManagerPage() {
         </div>
     );
 }
+
+

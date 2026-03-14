@@ -12,6 +12,12 @@ class ModuleQuizCreate(BaseModel):
     correct_answer: str
     explanation: str = ""
 
+class ModuleQuizUpdate(BaseModel):
+    question_text: Optional[str] = None
+    options: Optional[Dict[str, str]] = None
+    correct_answer: Optional[str] = None
+    explanation: Optional[str] = None
+
 class ModuleQuizOut(BaseModel):
     id: str
     module_id: str
@@ -177,12 +183,29 @@ class AssessmentQuestionCreate(BaseModel):
     correct_answer: str
     explanation: str = ""
 
+class AssessmentQuestionUpdate(BaseModel):
+    question_text: Optional[str] = None
+    options: Optional[Dict[str, str]] = None
+    correct_answer: Optional[str] = None
+    explanation: Optional[str] = None
+
 class AssessmentQuestionOut(BaseModel):
     id: str
     course_id: str
     question_text: str
     options: Dict[str, str]
     # correct_answer intentionally omitted for faculty-facing view
+
+    class Config:
+        from_attributes = True
+
+class AssessmentQuestionAdminOut(BaseModel):
+    id: str
+    course_id: str
+    question_text: str
+    options: Dict[str, str]
+    correct_answer: str
+    explanation: str = ""
 
     class Config:
         from_attributes = True
@@ -215,3 +238,13 @@ class CourseAnalyticsOut(BaseModel):
     total_completed: int
     completion_rate: float
     average_score: float
+
+
+class AIGenerateQuestionsRequest(BaseModel):
+    prompt: str = ""
+    count: int = 5
+    difficulty: str = "medium"
+
+
+class AIGenerateQuestionsResponse(BaseModel):
+    generated_count: int

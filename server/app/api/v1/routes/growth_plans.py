@@ -33,6 +33,8 @@ async def create_growth_plan(
         return plan
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
 @router.get("/me", response_model=GrowthPlanSchema)
 async def get_my_active_plan(

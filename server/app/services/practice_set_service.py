@@ -54,6 +54,11 @@ class PracticeSetService:
                     correct_option=q.correct_option,
                     explanation=q.explanation
                 ))
+
+            if not questions_to_add:
+                raise ValueError(
+                    f"No published questions available for domain '{set_in.domain}'."
+                )
         
         elif set_in.source == "CUSTOM":
             # Generate real AI questions based on topic
@@ -78,33 +83,13 @@ class PracticeSetService:
                         explanation=q_ai.explanation
                     ))
             else:
-                # Fallback to mock AI questions
-                for i in range(set_in.count):
-                    questions_to_add.append(PracticeSetQuestion(
-                        id=str(uuid4()),
-                        set_id=db_set.id,
-                        question_text=f"Sample AI Question {i+1} about {topic}: What is the core principle?",
-                        option_a="A) Concept Alpha",
-                        option_b="B) Concept Beta",
-                        option_c="C) Concept Gamma",
-                        option_d="D) Concept Delta",
-                        correct_option="A",
-                        explanation=f"This is a fallback placeholder explanation for {topic}."
-                    ))
+                raise RuntimeError(
+                    "Unable to generate custom practice questions right now. "
+                    "Please try again when AI service is available."
+                )
         
         if not questions_to_add:
-            # Fallback if no questions found
-            questions_to_add.append(PracticeSetQuestion(
-                id=str(uuid4()),
-                set_id=db_set.id,
-                question_text="Sample Question: What is the primary focus of this domain?",
-                option_a="A) Concept 1",
-                option_b="B) Concept 2",
-                option_c="C) Concept 3",
-                option_d="D) Concept 4",
-                correct_option="A",
-                explanation="Concept 1 is the primary focus."
-            ))
+            raise ValueError("Practice set generation failed: no questions resolved.")
 
         for pq in questions_to_add:
             self.db.add(pq)
@@ -123,7 +108,6 @@ class PracticeSetService:
     async def get_sets_by_faculty(self, faculty_id: str) -> List[PracticeSet]:
         result = await self.db.execute(
             select(PracticeSet)
-            .where(PracticeSet.id != None) # Dummy filter to allow join/options if needed
             .where(PracticeSet.faculty_id == faculty_id)
             .options(selectinload(PracticeSet.questions))
             .order_by(PracticeSet.created_at.desc())

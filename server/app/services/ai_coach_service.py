@@ -64,10 +64,10 @@ class AICoachService:
                     "description": "Start with an official test to unlock weakness-based suggestions.",
                 },
                 {
-                    "kind": "resource",
-                    "label": "Open learning resources",
-                    "url": "/faculty/resources",
-                    "description": "Browse materials by topic and build a study plan.",
+                    "kind": "course",
+                    "label": "Browse available courses",
+                    "url": "/faculty/courses",
+                    "description": "Open published courses and start with a guided learning path.",
                 },
             ]
 

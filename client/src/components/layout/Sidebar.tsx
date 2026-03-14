@@ -63,7 +63,6 @@ export function Sidebar() {
     { to: '/admin/course-analytics', label: 'Course Analytics', icon: PieChart },
     { to: '/admin/queries', label: 'Faculty Queries', icon: HelpCircle },
     { to: '/admin/ai-insights', label: 'AI Insights', icon: Sparkles },
-    { to: '/admin/resources', label: 'Resources', icon: Newspaper },
   ];
 
   const navItemCls = (active: boolean) =>

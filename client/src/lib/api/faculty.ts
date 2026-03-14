@@ -60,6 +60,14 @@ export interface FacultyProfileUpdate {
     experience_years?: number;
 }
 
+export interface PaginatedFacultyProfiles {
+    items: FacultyProfile[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
 export interface FacultySkillCreate {
     skill_name: string;
     domain: string;
@@ -70,6 +78,18 @@ export const facultyApi = {
     listProfiles: async (skip: number = 0, limit: number = 100): Promise<FacultyProfile[]> => {
         const response = await http.get<FacultyProfile[]>('/api/v1/faculty/', {
             params: { skip, limit }
+        });
+        return response.data;
+    },
+
+    listProfilesPaginated: async (params?: { page?: number; pageSize?: number; search?: string; department?: string }): Promise<PaginatedFacultyProfiles> => {
+        const response = await http.get<PaginatedFacultyProfiles>('/api/v1/faculty/paged', {
+            params: {
+                ...(params?.page ? { page: params.page } : {}),
+                ...(params?.pageSize ? { page_size: params.pageSize } : {}),
+                ...(params?.search ? { search: params.search } : {}),
+                ...(params?.department ? { department: params.department } : {}),
+            }
         });
         return response.data;
     },

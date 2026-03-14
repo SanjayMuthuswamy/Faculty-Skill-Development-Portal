@@ -13,6 +13,7 @@ router = APIRouter(tags=["tests"])
 async def list_tests(
     skip: int = 0,
     limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session)
 ):
     service = TestService(db)
@@ -32,6 +33,7 @@ async def create_test(
 @router.get("/{test_id}", response_model=TestSchema)
 async def get_test(
     test_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session)
 ):
     service = TestService(db)

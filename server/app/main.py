@@ -1,21 +1,39 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from fastapi import HTTPException
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.core.config import settings
+from app.core.monitoring import setup_sentry
 from app.api.v1.api import api_router
 import logging
 
 logger = logging.getLogger(__name__)
+setup_sentry()
 
 app = FastAPI(
     title="Faculty Skill Development Portal API",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json" if settings.ENABLE_API_DOCS else None,
+    docs_url="/docs" if settings.ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_API_DOCS else None,
     debug=settings.DEBUG,
     redirect_slashes=False
 )
+
+# Restrict host headers in production deployments.
+if settings.ALLOWED_HOSTS and "*" not in settings.ALLOWED_HOSTS:
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.ALLOWED_HOSTS,
+    )
+
+if settings.ENABLE_GZIP:
+    app.add_middleware(
+        GZipMiddleware,
+        minimum_size=settings.GZIP_MINIMUM_SIZE,
+    )
 
 # Set all CORS enabled origins
 if settings.CORS_ORIGINS:
@@ -62,13 +80,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return _add_cors_headers(response, request.headers.get("origin"))
 
 
-# Global exception handler – ensures CORS headers are always sent for 500s
+# Global exception handler ensures CORS headers are always sent for 500s
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"--- [SERVER] Unhandled exception: {type(exc).__name__}: {exc} ---", exc_info=True)
     response = JSONResponse(
         status_code=500,
-        content={"detail": f"Internal server error: {type(exc).__name__}"}
+        content={"detail": "Internal server error"}
     )
     return _add_cors_headers(response, request.headers.get("origin"))
 
@@ -77,4 +95,8 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root():
-    return {"message": "Faculty Skill Development Portal API is running"}
+    return {
+        "message": "Faculty Skill Development Portal API is running",
+        "environment": settings.ENVIRONMENT,
+    }
+

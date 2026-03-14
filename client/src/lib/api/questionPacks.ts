@@ -61,10 +61,45 @@ export interface QuestionCreate {
     explanation?: string;
 }
 
+export interface PaginatedQuestionPacks {
+    items: QuestionPack[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface PaginatedQuestions {
+    items: Question[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
 export const questionPacksApi = {
     listPacks: async (skip: number = 0, limit: number = 100, domain?: string, status?: string): Promise<QuestionPack[]> => {
         const response = await http.get<QuestionPack[]>('/api/v1/question-packs/', {
             params: { skip, limit, domain, status }
+        });
+        return response.data;
+    },
+
+    listPacksPaginated: async (params?: {
+        page?: number;
+        pageSize?: number;
+        search?: string;
+        domain?: string;
+        status?: string;
+    }): Promise<PaginatedQuestionPacks> => {
+        const response = await http.get<PaginatedQuestionPacks>('/api/v1/question-packs/paged', {
+            params: {
+                ...(params?.page ? { page: params.page } : {}),
+                ...(params?.pageSize ? { page_size: params.pageSize } : {}),
+                ...(params?.search ? { search: params.search } : {}),
+                ...(params?.domain ? { domain: params.domain } : {}),
+                ...(params?.status ? { status: params.status } : {}),
+            }
         });
         return response.data;
     },
@@ -97,6 +132,17 @@ export const questionPacksApi = {
     listAllQuestions: async (skip: number = 0, limit: number = 100): Promise<Question[]> => {
         const response = await http.get<Question[]>('/api/v1/question-packs/questions', {
             params: { skip, limit }
+        });
+        return response.data;
+    },
+
+    listAllQuestionsPaginated: async (params?: { page?: number; pageSize?: number; search?: string }): Promise<PaginatedQuestions> => {
+        const response = await http.get<PaginatedQuestions>('/api/v1/question-packs/questions/paged', {
+            params: {
+                ...(params?.page ? { page: params.page } : {}),
+                ...(params?.pageSize ? { page_size: params.pageSize } : {}),
+                ...(params?.search ? { search: params.search } : {}),
+            }
         });
         return response.data;
     },

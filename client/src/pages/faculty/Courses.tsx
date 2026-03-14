@@ -16,8 +16,10 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
+import { Pagination } from '../../components/ui/Pagination';
 import { useToast } from '../../components/ui/Toast';
 import { cn } from '../../lib/utils';
+import { useDebouncedValue } from '../../lib/hooks/useDebouncedValue';
 
 const LEVEL_COLORS: Record<string, string> = {
     beginner: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -80,6 +82,9 @@ export default function CoursesPage() {
     const [search, setSearch] = useState('');
     const [levelFilter, setLevelFilter] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
+    const [availableCoursesPage, setAvailableCoursesPage] = useState(1);
+    const debouncedSearch = useDebouncedValue(search, 300);
+    const ITEMS_PER_PAGE = 10;
 
     const { data: courses = [], isLoading, error } = useQuery({
         queryKey: ['courses'],
@@ -118,8 +123,8 @@ export default function CoursesPage() {
     }, [courses]);
 
     const filteredCourses = courses.filter((c: Course) => {
-        const matchSearch = !search || c.title.toLowerCase().includes(search.toLowerCase()) ||
-            (c.description || '').toLowerCase().includes(search.toLowerCase());
+        const matchSearch = !debouncedSearch || c.title.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+            (c.description || '').toLowerCase().includes(debouncedSearch.toLowerCase());
         const matchLevel = !levelFilter || c.skill_level === levelFilter;
         const matchCategory = activeCategory === 'All' || c.tags?.includes(activeCategory);
         return matchSearch && matchLevel && matchCategory;
@@ -135,6 +140,8 @@ export default function CoursesPage() {
     // Sections logic
     const enrolledCourses = courses.filter(c => enrolledIds.has(c.id));
     const availableCourses = filteredCourses.filter(c => !enrolledIds.has(c.id));
+    const availableCoursesTotalPages = Math.max(1, Math.ceil(availableCourses.length / ITEMS_PER_PAGE));
+    const pagedAvailableCourses = availableCourses.slice((availableCoursesPage - 1) * ITEMS_PER_PAGE, availableCoursesPage * ITEMS_PER_PAGE);
 
     if (isLoading) return (
         <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
@@ -251,7 +258,10 @@ export default function CoursesPage() {
                                 type="text"
                                 placeholder="Search our curriculum..."
                                 value={search}
-                                onChange={e => setSearch(e.target.value)}
+                                onChange={e => {
+                                    setSearch(e.target.value);
+                                    setAvailableCoursesPage(1);
+                                }}
                                 className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white border border-slate-200 text-sm font-semibold focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all"
                             />
                         </div>
@@ -259,7 +269,10 @@ export default function CoursesPage() {
                             <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <select
                                 value={levelFilter}
-                                onChange={(e) => setLevelFilter(e.target.value)}
+                                onChange={(e) => {
+                                    setLevelFilter(e.target.value);
+                                    setAvailableCoursesPage(1);
+                                }}
                                 className="w-full h-12 pl-11 pr-4 rounded-2xl bg-white border border-slate-200 text-sm font-semibold focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all capitalize"
                             >
                                 <option value="">All levels</option>
@@ -276,7 +289,10 @@ export default function CoursesPage() {
                     {categories.slice(0, 10).map((cat) => (
                         <button
                             key={cat}
-                            onClick={() => setActiveCategory(cat)}
+                            onClick={() => {
+                                setActiveCategory(cat);
+                                setAvailableCoursesPage(1);
+                            }}
                             className={cn(
                                 "px-6 py-2.5 rounded-full text-xs font-semibold tracking-widest uppercase transition-all duration-300 border-2",
                                 activeCategory === cat
@@ -297,7 +313,7 @@ export default function CoursesPage() {
                         </div>
                         <h3 className="text-xl font-bold text-slate-900">No courses available at the moment</h3>
                         <p className="text-slate-500 font-medium">Try broadening your search or resetting categories.</p>
-                        <Button variant="ghost" className="mt-6 text-blue-600 font-bold h-12 px-8 rounded-xl" onClick={() => { setSearch(''); setActiveCategory('All'); setLevelFilter('') }}>
+                        <Button variant="ghost" className="mt-6 text-blue-600 font-bold h-12 px-8 rounded-xl" onClick={() => { setSearch(''); setActiveCategory('All'); setLevelFilter(''); setAvailableCoursesPage(1); }}>
                             RESET FILTERS
                         </Button>
                     </div>
@@ -314,7 +330,7 @@ export default function CoursesPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {availableCourses.map((course: Course) => (
+                                {pagedAvailableCourses.map((course: Course) => (
                                     <TableRow key={course.id} className="hover:bg-slate-50/50 transition-colors group cursor-default">
                                         <TableCell>
                                             <div className="flex items-center gap-4">
@@ -362,6 +378,14 @@ export default function CoursesPage() {
                             </TableBody>
                         </Table>
                     </div>
+                )}
+                {availableCourses.length > ITEMS_PER_PAGE && (
+                    <Pagination
+                        currentPage={availableCoursesPage}
+                        totalPages={availableCoursesTotalPages}
+                        onPageChange={setAvailableCoursesPage}
+                        className="pt-0"
+                    />
                 )}
             </div>
         </div>

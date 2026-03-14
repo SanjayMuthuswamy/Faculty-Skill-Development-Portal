@@ -1,5 +1,9 @@
 import logging
+from math import ceil
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -15,6 +19,7 @@ from app.models.course_module import CourseModule
 from app.schemas.faculty import FacultyProfile as FacultySchema, FacultyProfileUpdate, FacultyCreateRequest, SkillSuggestions
 from app.schemas.skill import FacultySkill as FacultySkillSchema, FacultySkillCreate, FacultySkillUpdate
 from app.schemas.news import NewsPreferences, NewsPreferencesUpdate, PersonalizedNewsResponse
+from app.core.pagination import get_pagination_bounds
 from app.services.faculty_service import FacultyService
 from app.services.news_service import NewsService
 
@@ -54,6 +59,62 @@ async def list_faculty_profiles(
     result = await service.get_multi(skip=skip, limit=limit)
     logger.debug(f"Retrieved {len(result)} faculty profiles")
     return result
+
+
+@router.get("/paged")
+async def list_faculty_profiles_paged(
+    page: int = 1,
+    page_size: int = 10,
+    search: Optional[str] = None,
+    department: Optional[str] = None,
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: AsyncSession = Depends(get_session)
+):
+    offset, normalized_page, normalized_page_size = get_pagination_bounds(page=page, page_size=page_size)
+
+    base_query = select(FacultyProfile).join(User, FacultyProfile.user_id == User.id)
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        if search_term != "%%":
+            base_query = base_query.where(
+                or_(
+                    func.lower(User.name).like(func.lower(search_term)),
+                    func.lower(User.email).like(func.lower(search_term)),
+                    func.lower(FacultyProfile.department).like(func.lower(search_term)),
+                    func.lower(FacultyProfile.designation).like(func.lower(search_term)),
+                )
+            )
+
+    if department:
+        base_query = base_query.where(FacultyProfile.department == department)
+
+    total_stmt = select(func.count()).select_from(base_query.subquery())
+    total = (await db.execute(total_stmt)).scalar_one()
+
+    result = await db.execute(
+        base_query
+        .order_by(FacultyProfile.created_at.desc())
+        .offset(offset)
+        .limit(normalized_page_size)
+        .options(
+            selectinload(FacultyProfile.user),
+            selectinload(FacultyProfile.skills).selectinload(FacultySkill.skill),
+            selectinload(FacultyProfile.course_enrollments)
+            .selectinload(CourseEnrollment.course)
+            .selectinload(Course.modules)
+            .selectinload(CourseModule.quiz_questions)
+        )
+    )
+    items = result.scalars().all()
+
+    return {
+        "items": items,
+        "total": total,
+        "page": normalized_page,
+        "page_size": normalized_page_size,
+        "total_pages": ceil(total / normalized_page_size) if total else 1,
+    }
 
 @router.get("/me", response_model=FacultySchema)
 async def get_my_profile(

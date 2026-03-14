@@ -135,7 +135,7 @@ export default function AdminReports() {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={deptStats}>
                                         <XAxis dataKey="dept" axisLine={false} tickLine={false} />
-                                        <YAxis axisLine={false} tickLine={false} />
+                                        <YAxis domain={[0, 100]} axisLine={false} tickLine={false} />
                                         <Tooltip cursor={{ fill: '#f3f4f6' }} />
                                         <Legend verticalAlign="top" height={36} />
                                         <Bar dataKey="planAdoption" name="Adoption %" fill="#3b82f6" radius={[4, 4, 0, 0]} />

@@ -1,15 +1,18 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from math import ceil
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from datetime import datetime
 
 from app.db.session import get_session
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.enums import UserRole
 from app.models.faculty_query import FacultyQuery
+from app.core.pagination import get_pagination_bounds
 
 router = APIRouter()
 
@@ -65,17 +68,57 @@ async def my_queries(
 @router.get("")
 async def list_queries(
     status: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=100),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
     """Admin: list all queries."""
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(403, "Admin only")
-    q = select(FacultyQuery).options(selectinload(FacultyQuery.faculty)).order_by(FacultyQuery.created_at.desc())
+
+    base_query = select(FacultyQuery).join(User, FacultyQuery.faculty_id == User.id)
+
     if status:
-        q = q.where(FacultyQuery.status == status)
-    result = await db.execute(q)
-    return [_query_out(fq) for fq in result.scalars().all()]
+        base_query = base_query.where(FacultyQuery.status == status)
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        if search_term != "%%":
+            base_query = base_query.where(
+                or_(
+                    func.lower(User.name).like(func.lower(search_term)),
+                    func.lower(User.email).like(func.lower(search_term)),
+                    func.lower(FacultyQuery.category).like(func.lower(search_term)),
+                    func.lower(FacultyQuery.description).like(func.lower(search_term)),
+                )
+            )
+
+    count_stmt = select(func.count()).select_from(base_query.subquery())
+    total = (await db.execute(count_stmt)).scalar_one()
+
+    offset, normalized_page, normalized_page_size = get_pagination_bounds(
+        page=page,
+        page_size=page_size,
+    )
+
+    paged_query = (
+        base_query.options(selectinload(FacultyQuery.faculty))
+        .order_by(FacultyQuery.created_at.desc())
+        .offset(offset)
+        .limit(normalized_page_size)
+    )
+    result = await db.execute(paged_query)
+    items = [_query_out(fq) for fq in result.scalars().all()]
+
+    return {
+        "items": items,
+        "total": total,
+        "page": normalized_page,
+        "page_size": normalized_page_size,
+        "total_pages": ceil(total / normalized_page_size) if total else 1,
+    }
 
 
 @router.patch("/{query_id}")

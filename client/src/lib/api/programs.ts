@@ -57,10 +57,37 @@ export interface ProgramCreate {
     status?: ProgramStatus;
 }
 
+export interface PaginatedPrograms {
+    items: Program[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
 export const programsApi = {
     listPrograms: async (skip: number = 0, limit: number = 100): Promise<Program[]> => {
         const response = await http.get<Program[]>('/api/v1/programs/', {
             params: { skip, limit }
+        });
+        return response.data;
+    },
+
+    listProgramsPaginated: async (params?: {
+        page?: number;
+        pageSize?: number;
+        search?: string;
+        status?: ProgramStatus | 'ALL';
+        mode?: string;
+    }): Promise<PaginatedPrograms> => {
+        const response = await http.get<PaginatedPrograms>('/api/v1/programs/paged', {
+            params: {
+                ...(params?.page ? { page: params.page } : {}),
+                ...(params?.pageSize ? { page_size: params.pageSize } : {}),
+                ...(params?.search ? { search: params.search } : {}),
+                ...(params?.status && params.status !== 'ALL' ? { status: params.status } : {}),
+                ...(params?.mode ? { mode: params.mode } : {}),
+            }
         });
         return response.data;
     },

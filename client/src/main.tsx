@@ -4,20 +4,22 @@ import App from './App'
 import { AuthProvider } from './app/providers/AuthProvider'
 import { QueryClientProvider } from './app/providers/QueryClientProvider'
 import { ToastProvider } from './components/ui/Toast'
-import { resetStorage } from './lib/storage'
+import { setupSentry } from './lib/monitoring/sentry'
+import * as Sentry from '@sentry/react'
 import './styles/globals.css'
 
-// Expose resetStorage globally for easy data refresh
-(window as any).resetStorage = resetStorage;
+setupSentry()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <QueryClientProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <Sentry.ErrorBoundary fallback={<div className="p-8 text-sm text-slate-600">Something went wrong. Please refresh.</div>}>
+      <QueryClientProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </Sentry.ErrorBoundary>
   </React.StrictMode>,
 )

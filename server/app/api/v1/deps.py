@@ -22,7 +22,7 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     session: AsyncSession = Depends(get_session),
 ) -> User:
-    """Get current authenticated user with faculty_profile eagerly loaded."""
+    """Get current authenticated user."""
     token = credentials.credentials
     payload = decode_token(token, settings.JWT_ACCESS_SECRET)
 
@@ -41,17 +41,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
-    
-    # If this is a faculty user, ensure faculty_profile is eagerly loaded
-    # This prevents lazy loading errors in async context
-    if user.role == UserRole.FACULTY and user.faculty_profile is None:
-        from app.models.faculty_profile import FacultyProfile
-        from sqlalchemy.future import select
-        res = await session.execute(
-            select(FacultyProfile).where(FacultyProfile.user_id == user.id)
-        )
-        user.faculty_profile = res.scalar_one_or_none()
-        
+
     return user
 
 

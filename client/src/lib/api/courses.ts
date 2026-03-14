@@ -79,6 +79,11 @@ export interface AssessmentQuestion {
     options: Record<string, string>;
 }
 
+export interface AdminAssessmentQuestion extends AssessmentQuestion {
+    correct_answer: string;
+    explanation: string;
+}
+
 export interface CourseAttempt {
     id: string;
     faculty_id: string;
@@ -98,6 +103,16 @@ export interface CourseAnalytics {
     total_completed: number;
     completion_rate: number;
     average_score: number;
+}
+
+export interface AIGenerateQuestionsPayload {
+    prompt?: string;
+    count?: number;
+    difficulty?: string;
+}
+
+export interface AIGenerateQuestionsResult {
+    generated_count: number;
 }
 
 // ── API calls ─────────────────────────────────────────────────────────────────
@@ -133,15 +148,46 @@ export const coursesApi = {
     addQuizQuestion: (courseId: string, moduleId: string, data: Partial<ModuleQuiz>): Promise<ModuleQuiz> =>
         http.post(`/api/v1/courses/${courseId}/modules/${moduleId}/quiz`, data).then(r => r.data),
 
+    generateModuleQuizQuestions: (
+        courseId: string,
+        moduleId: string,
+        data: AIGenerateQuestionsPayload
+    ): Promise<AIGenerateQuestionsResult> =>
+        http.post(`/api/v1/courses/${courseId}/modules/${moduleId}/quiz/generate`, data).then(r => r.data),
+
     deleteQuizQuestion: (courseId: string, moduleId: string, quizId: string): Promise<void> =>
         http.delete(`/api/v1/courses/${courseId}/modules/${moduleId}/quiz/${quizId}`).then(r => r.data),
+
+    updateQuizQuestion: (
+        courseId: string,
+        moduleId: string,
+        quizId: string,
+        data: Partial<ModuleQuiz>
+    ): Promise<ModuleQuiz> =>
+        http.put(`/api/v1/courses/${courseId}/modules/${moduleId}/quiz/${quizId}`, data).then(r => r.data),
 
     // Assessment questions
     addAssessmentQuestion: (courseId: string, data: object): Promise<AssessmentQuestion> =>
         http.post(`/api/v1/courses/${courseId}/assessment-questions`, data).then(r => r.data),
 
+    listAdminAssessmentQuestions: (courseId: string): Promise<AdminAssessmentQuestion[]> =>
+        http.get(`/api/v1/courses/${courseId}/assessment-questions`).then(r => r.data),
+
+    generateAssessmentQuestions: (
+        courseId: string,
+        data: AIGenerateQuestionsPayload
+    ): Promise<AIGenerateQuestionsResult> =>
+        http.post(`/api/v1/courses/${courseId}/assessment-questions/generate`, data).then(r => r.data),
+
     deleteAssessmentQuestion: (courseId: string, questionId: string): Promise<void> =>
         http.delete(`/api/v1/courses/${courseId}/assessment-questions/${questionId}`).then(r => r.data),
+
+    updateAssessmentQuestion: (
+        courseId: string,
+        questionId: string,
+        data: Partial<AdminAssessmentQuestion>
+    ): Promise<AdminAssessmentQuestion> =>
+        http.put(`/api/v1/courses/${courseId}/assessment-questions/${questionId}`, data).then(r => r.data),
 
     // Enrollment
     enrollInCourse: (courseId: string): Promise<CourseEnrollment> =>

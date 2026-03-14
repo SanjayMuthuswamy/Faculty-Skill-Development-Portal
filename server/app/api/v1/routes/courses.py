@@ -1,4 +1,5 @@
 
+import logging
 import random
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,13 +14,24 @@ from app.services.llm_service import LLMService
 from app.schemas.course import (
     CourseCreate, CourseUpdate, CourseOut, CourseListOut,
     CourseModuleCreate, CourseModuleUpdate, CourseModuleOut,
-    ModuleQuizCreate, ModuleQuizOut,
-    AssessmentQuestionCreate, AssessmentQuestionOut,
+    ModuleQuizCreate, ModuleQuizUpdate, ModuleQuizOut,
+    AssessmentQuestionCreate, AssessmentQuestionUpdate, AssessmentQuestionOut, AssessmentQuestionAdminOut,
+    AIGenerateQuestionsRequest, AIGenerateQuestionsResponse,
     CourseEnrollmentOut, LessonProgressUpdate, LessonProgressOut,
     QuizSubmit, AssessmentSubmit, CourseAttemptOut, CourseAnalyticsOut, CourseProgressOut
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _to_llm_difficulty(value: str | None) -> str:
+    normalized = (value or "medium").strip().lower()
+    if normalized in {"beginner", "easy"}:
+        return "Easy"
+    if normalized in {"advanced", "hard"}:
+        return "Hard"
+    return "Medium"
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
@@ -83,6 +95,8 @@ async def get_course(
     svc = CourseService(db)
     course = await svc.get_course(course_id)
     if not course:
+        raise HTTPException(404, "Course not found")
+    if current_user.role != UserRole.ADMIN and not course.is_published:
         raise HTTPException(404, "Course not found")
     return course
 
@@ -170,6 +184,66 @@ async def add_quiz_question(
     return await svc.add_quiz_question(module_id, body.model_dump())
 
 
+@router.post(
+    "/{course_id}/modules/{module_id}/quiz/generate",
+    response_model=AIGenerateQuestionsResponse,
+    status_code=201,
+)
+async def generate_module_quiz_questions(
+    course_id: str,
+    module_id: str,
+    body: AIGenerateQuestionsRequest,
+    db: AsyncSession = Depends(get_session),
+    _: User = Depends(require_admin),
+):
+    svc = CourseService(db)
+    course = await svc.get_course(course_id)
+    module = await svc.get_module(module_id)
+    if not course:
+        raise HTTPException(404, "Course not found")
+    if not module or module.course_id != course_id:
+        raise HTTPException(404, "Module not found")
+
+    topic = f"{course.title} - {module.title}"
+    if body.prompt.strip():
+        topic = f"{topic}. Focus: {body.prompt.strip()}"
+
+    llm = LLMService()
+    quiz_data = await llm.generate_quiz(
+        topic=topic,
+        difficulty=_to_llm_difficulty(body.difficulty),
+        num_questions=max(1, min(body.count, 20)),
+        marks=1,
+    )
+    if not quiz_data or not quiz_data.quiz:
+        raise HTTPException(status_code=502, detail="AI could not generate quiz questions.")
+
+    generated = 0
+    for q in quiz_data.quiz:
+        options = {
+            "A": q.options.get("A", ""),
+            "B": q.options.get("B", ""),
+            "C": q.options.get("C", ""),
+            "D": q.options.get("D", ""),
+        }
+        correct = (q.correct_answer or "A").upper()
+        if correct not in {"A", "B", "C", "D"}:
+            correct = "A"
+
+        await svc.add_quiz_question(
+            module_id,
+            {
+                "question_text": q.question,
+                "options": options,
+                "correct_answer": correct,
+                "explanation": body.prompt.strip() or "AI generated question.",
+            },
+        )
+        generated += 1
+
+    return {"generated_count": generated}
+
+
 @router.delete("/{course_id}/modules/{module_id}/quiz/{quiz_id}", status_code=204)
 async def delete_quiz_question(
     course_id: str, module_id: str, quiz_id: str,
@@ -178,6 +252,25 @@ async def delete_quiz_question(
 ):
     svc = CourseService(db)
     await svc.delete_quiz_question(quiz_id)
+
+
+@router.put("/{course_id}/modules/{module_id}/quiz/{quiz_id}", response_model=ModuleQuizOut)
+async def update_quiz_question(
+    course_id: str,
+    module_id: str,
+    quiz_id: str,
+    body: ModuleQuizUpdate,
+    db: AsyncSession = Depends(get_session),
+    _: User = Depends(require_admin)
+):
+    svc = CourseService(db)
+    module = await svc.get_module(module_id)
+    if not module or module.course_id != course_id:
+        raise HTTPException(404, "Module not found")
+    quiz = await svc.get_quiz_question(quiz_id)
+    if not quiz or quiz.module_id != module_id:
+        raise HTTPException(404, "Quiz question not found")
+    return await svc.update_quiz_question(quiz, body.model_dump(exclude_none=True))
 
 
 # ── Assessment Questions (Admin) ──────────────────────────────────────────────
@@ -193,6 +286,75 @@ async def add_assessment_question(
     return await svc.add_assessment_question(course_id, body.model_dump())
 
 
+@router.get("/{course_id}/assessment-questions", response_model=List[AssessmentQuestionAdminOut])
+async def list_assessment_questions_admin(
+    course_id: str,
+    db: AsyncSession = Depends(get_session),
+    _: User = Depends(require_admin)
+):
+    svc = CourseService(db)
+    course = await svc.get_course(course_id)
+    if not course:
+        raise HTTPException(404, "Course not found")
+    return await svc.get_admin_assessment_questions(course_id)
+
+
+@router.post(
+    "/{course_id}/assessment-questions/generate",
+    response_model=AIGenerateQuestionsResponse,
+    status_code=201,
+)
+async def generate_assessment_questions(
+    course_id: str,
+    body: AIGenerateQuestionsRequest,
+    db: AsyncSession = Depends(get_session),
+    _: User = Depends(require_admin),
+):
+    svc = CourseService(db)
+    course = await svc.get_course(course_id)
+    if not course:
+        raise HTTPException(404, "Course not found")
+
+    topic = f"{course.title} final assessment"
+    if body.prompt.strip():
+        topic = f"{topic}. Focus: {body.prompt.strip()}"
+
+    llm = LLMService()
+    quiz_data = await llm.generate_quiz(
+        topic=topic,
+        difficulty=_to_llm_difficulty(body.difficulty),
+        num_questions=max(1, min(body.count, 30)),
+        marks=1,
+    )
+    if not quiz_data or not quiz_data.quiz:
+        raise HTTPException(status_code=502, detail="AI could not generate assessment questions.")
+
+    generated = 0
+    for q in quiz_data.quiz:
+        options = {
+            "A": q.options.get("A", ""),
+            "B": q.options.get("B", ""),
+            "C": q.options.get("C", ""),
+            "D": q.options.get("D", ""),
+        }
+        correct = (q.correct_answer or "A").upper()
+        if correct not in {"A", "B", "C", "D"}:
+            correct = "A"
+
+        await svc.add_assessment_question(
+            course_id,
+            {
+                "question_text": q.question,
+                "options": options,
+                "correct_answer": correct,
+                "explanation": body.prompt.strip() or "AI generated assessment question.",
+            },
+        )
+        generated += 1
+
+    return {"generated_count": generated}
+
+
 @router.delete("/{course_id}/assessment-questions/{question_id}", status_code=204)
 async def delete_assessment_question(
     course_id: str, question_id: str,
@@ -201,6 +363,21 @@ async def delete_assessment_question(
 ):
     svc = CourseService(db)
     await svc.delete_assessment_question(question_id)
+
+
+@router.put("/{course_id}/assessment-questions/{question_id}", response_model=AssessmentQuestionAdminOut)
+async def update_assessment_question(
+    course_id: str,
+    question_id: str,
+    body: AssessmentQuestionUpdate,
+    db: AsyncSession = Depends(get_session),
+    _: User = Depends(require_admin)
+):
+    svc = CourseService(db)
+    question = await svc.get_assessment_question(question_id)
+    if not question or question.course_id != course_id:
+        raise HTTPException(404, "Assessment question not found")
+    return await svc.update_assessment_question(question, body.model_dump(exclude_none=True))
 
 
 # ── Enrollment (Faculty) ──────────────────────────────────────────────────────
@@ -269,6 +446,11 @@ async def get_assessment(
     Falls back to module quiz questions (video-topic based) when no final bank exists.
     """
     svc = CourseService(db)
+    if current_user.role != UserRole.FACULTY:
+        raise HTTPException(403, "Faculty access required")
+    enrollment = await svc.get_enrollment(current_user.id, course_id)
+    if not enrollment:
+        raise HTTPException(403, "Enroll in this course before taking the assessment")
     questions = await svc.get_assessment_questions(course_id)
     random.shuffle(questions)
     return [
@@ -290,6 +472,11 @@ async def submit_assessment(
     current_user: User = Depends(get_current_user)
 ):
     svc = CourseService(db)
+    if current_user.role != UserRole.FACULTY:
+        raise HTTPException(403, "Faculty access required")
+    enrollment = await svc.get_enrollment(current_user.id, course_id)
+    if not enrollment:
+        raise HTTPException(403, "Enroll in this course before submitting an assessment")
     attempt, wrong_questions = await svc.submit_assessment(
         current_user.id, course_id, body.answers, body.time_taken_seconds
     )
@@ -302,9 +489,13 @@ async def submit_assessment(
         if feedback:
             await svc.save_ai_feedback(attempt.id, feedback)
             attempt.ai_feedback = feedback
-    except Exception:
-        pass  # feedback is optional — don't fail the submission
-
+    except Exception as e:
+        logger.warning(
+            "Course feedback generation failed for course=%s attempt=%s: %s",
+            course_id,
+            attempt.id,
+            e,
+        )
     return attempt
 
 
@@ -319,3 +510,4 @@ async def get_my_attempt(
     if not attempt:
         raise HTTPException(404, "No attempt found")
     return attempt
+

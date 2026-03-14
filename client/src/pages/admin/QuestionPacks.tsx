@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { questionPacksApi, PackStatus } from '../../lib/api/questionPacks';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
@@ -13,6 +13,8 @@ import { useNavigate } from 'react-router-dom';
 import { SkillDomain } from '../../lib/api/skills';
 import { Difficulty } from '../../lib/api/tests';
 import { AddNewItemModal, SelectWithAddNew } from '../../components/shared/AddNewItemModal';
+import { Pagination } from '../../components/ui/Pagination';
+import { useDebouncedValue } from '../../lib/hooks/useDebouncedValue';
 
 export default function AdminQuestionPacks() {
     const { addToast } = useToast();
@@ -22,24 +24,25 @@ export default function AdminQuestionPacks() {
     const [isAddTopicModalOpen, setIsAddTopicModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [domainFilter, setDomainFilter] = useState<SkillDomain | 'ALL'>('ALL');
+    const [currentPage, setCurrentPage] = useState(1);
+    const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
+    const ITEMS_PER_PAGE = 9;
 
     // Centralized topics (this should come from an API in a real app)
     const [topics, setTopics] = useState(['Machine Learning', 'Deep Learning', 'Neural Networks', 'Python Basics']);
 
-    const { data: packs, isLoading } = useQuery({
-        queryKey: ['questionPacks'],
-        queryFn: () => questionPacksApi.listPacks(),
+    const { data: packsData, isLoading } = useQuery({
+        queryKey: ['questionPacks', currentPage, ITEMS_PER_PAGE, debouncedSearchQuery, domainFilter],
+        queryFn: () => questionPacksApi.listPacksPaginated({
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            search: debouncedSearchQuery || undefined,
+            domain: domainFilter !== 'ALL' ? domainFilter : undefined,
+        }),
     });
 
-    const filteredPacks = useMemo(() => {
-        if (!packs) return [];
-        return packs.filter(p => {
-            const matchesSearch = p.pack_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (p.topic?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
-            const matchesDomain = domainFilter === 'ALL' || p.domain === domainFilter;
-            return matchesSearch && matchesDomain;
-        });
-    }, [packs, searchQuery, domainFilter]);
+    const filteredPacks = packsData?.items ?? [];
+    const totalPages = packsData?.total_pages ?? 1;
 
     const { register, handleSubmit, reset, setValue, watch } = useForm<any>({
         defaultValues: {
@@ -93,7 +96,10 @@ export default function AdminQuestionPacks() {
                                 placeholder="Search packs or topics..."
                                 className="pl-10"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setCurrentPage(1);
+                                }}
                             />
                         </div>
                         <div className="flex items-center gap-2">
@@ -101,7 +107,10 @@ export default function AdminQuestionPacks() {
                             <select
                                 className="h-10 rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 w-40"
                                 value={domainFilter}
-                                onChange={(e) => setDomainFilter(e.target.value as any)}
+                                onChange={(e) => {
+                                    setDomainFilter(e.target.value as any);
+                                    setCurrentPage(1);
+                                }}
                             >
                                 <option value="ALL">All Domains</option>
                                 <option value={SkillDomain.TEACHING}>Teaching</option>
@@ -172,6 +181,14 @@ export default function AdminQuestionPacks() {
                         </Card>
                     ))}
                 </div>
+            )}
+            {totalPages > 1 && (
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    className="pt-0"
+                />
             )}
 
             <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Create New Question Pack">
