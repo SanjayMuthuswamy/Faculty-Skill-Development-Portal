@@ -19,6 +19,7 @@ A production-grade full-stack boilerplate for a Faculty Skill Development Portal
 Production deployment documentation:
 
 - `docs/PRODUCTION_DEPLOYMENT.md`
+- `docs/VERCEL_RENDER_DEPLOY.md` (Vercel frontend + Render backend)
 
 Run:
 
@@ -147,8 +148,8 @@ fsdp-portal/
    - API Documentation: `http://localhost:8000/docs`
 
 4. **Login with demo accounts**
-   - Admin: `admin@fsdp.com` / `Admin@123`
-   - Faculty: `faculty@fsdp.com` / `Faculty@123`
+   - Admin: `admin@fsdp.com` / `123456`
+   - Faculty: `faculty@fsdp.com` / `123456`
 
 ### Local Setup (Development)
 
@@ -230,7 +231,7 @@ fsdp-portal/
   ```json
   {
     "email": "admin@fsdp.com",
-    "password": "Admin@123"
+    "password": "123456"
   }
   ```
   Response:

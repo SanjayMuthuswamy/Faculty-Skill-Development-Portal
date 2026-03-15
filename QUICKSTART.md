@@ -23,7 +23,7 @@ docker-compose up
 
 | Role   | Email              | Password    |
 |--------|-------------------|-------------|
-| Admin  | sanjay@fsdp.com   | 123456      |
+| Admin  | admin@fsdp.com    | 123456      |
 | Faculty| faculty@fsdp.com  | 123456      |
 
 ---
@@ -50,6 +50,14 @@ docker-compose restart postgres server
 # Verify CORS is configured
 # Check CORS_ORIGINS in server/.env matches frontend origin
 # Default: http://localhost:5173
+```
+
+### Login Fails With Demo Credentials
+```bash
+# If your database was already initialized before demo bootstrap was enabled,
+# create/update demo users once:
+cd server
+python -c "from app.db.init_db import init_db_command; init_db_command()"
 ```
 
 ### Node Modules Issues

@@ -1,0 +1,72 @@
+databases:
+  - name: fsdp-postgres
+    plan: free
+    databaseName: fsdp_db
+    user: fsdp_user
+
+services:
+  - type: web
+    name: fsdp-backend
+    runtime: python
+    rootDir: server
+    plan: free
+    buildCommand: pip install .
+    startCommand: >-
+      alembic upgrade head &&
+      python -c "from app.db.init_db import init_db_command; init_db_command()" &&
+      gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:$PORT app.main:app --access-logfile - --error-logfile -
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    disk:
+      name: fsdp-uploads
+      mountPath: /opt/render/project/src/server/uploads
+      sizeGB: 1
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: ENABLE_API_DOCS
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fsdp-postgres
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: BOOTSTRAP_DEMO_USERS
+        value: "false"
+      - key: DEMO_ADMIN_EMAIL
+        value: admin@fsdp.com
+      - key: DEMO_ADMIN_PASSWORD
+        sync: false
+      - key: DEMO_FACULTY_EMAIL
+        value: faculty@fsdp.com
+      - key: DEMO_FACULTY_PASSWORD
+        sync: false
+      - key: NEWSDATA_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: openrouter/auto
+      - key: LLM_TIMEOUT_SECONDS
+        value: "60"
+      - key: LLM_MAX_RETRIES
+        value: "2"
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_TRACES_SAMPLE_RATE
+        value: "0.1"
+      - key: SENTRY_PROFILES_SAMPLE_RATE
+        value: "0.0"

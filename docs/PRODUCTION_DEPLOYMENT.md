@@ -64,3 +64,13 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 ## 5. Recommended next step (internet-facing)
 
 Put this stack behind a TLS reverse proxy (Nginx Proxy Manager, Caddy, or Traefik) and terminate HTTPS there.
+
+## 6. Uploads persistence
+
+The backend serves user uploads from `/app/uploads` (for example profile images).
+On ephemeral platforms, files in container disks are lost on restart/redeploy.
+
+Use one of these in production:
+
+- A persistent volume mounted to `/app/uploads`
+- Object storage (S3/R2/GCS) and store object URLs in the database
