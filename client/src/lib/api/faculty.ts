@@ -43,6 +43,7 @@ export interface FacultyProfile {
     department?: string;
     designation?: string;
     experience_years?: number;
+    profile_image_url?: string;
     enrollment_count?: number;
     created_at: string;
     user?: {
@@ -74,6 +75,18 @@ export interface FacultySkillCreate {
     level?: number;
 }
 
+const apiBase = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
+
+export const resolveBackendAssetUrl = (path?: string | null): string | undefined => {
+    if (!path) {
+        return undefined;
+    }
+    if (/^https?:\/\//i.test(path)) {
+        return path;
+    }
+    return `${apiBase}${path.startsWith('/') ? path : `/${path}`}`;
+};
+
 export const facultyApi = {
     listProfiles: async (skip: number = 0, limit: number = 100): Promise<FacultyProfile[]> => {
         const response = await http.get<FacultyProfile[]>('/api/v1/faculty/', {
@@ -101,6 +114,15 @@ export const facultyApi = {
 
     updateMe: async (data: FacultyProfileUpdate): Promise<FacultyProfile> => {
         const response = await http.patch<FacultyProfile>('/api/v1/faculty/me', data);
+        return response.data;
+    },
+
+    uploadProfileImage: async (file: File): Promise<FacultyProfile> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await http.post<FacultyProfile>('/api/v1/faculty/me/profile-image', formData, {
+            headers: { 'Content-Type': undefined },
+        });
         return response.data;
     },
 
