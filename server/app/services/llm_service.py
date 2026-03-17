@@ -141,7 +141,21 @@ class LLMService:
             return "65%"
         return "70%"
 
-    async def _call_llm(self, prompt: str, system_prompt: str = "") -> Optional[str]:
+    def _normalize_topic_label(self, topic: str) -> str:
+        cleaned = re.sub(r"\s+", " ", (topic or "").strip())
+        if not cleaned:
+            return "the target topic"
+        if len(cleaned) <= 90:
+            return cleaned
+        # Keep fallback prompts concise and readable when topic text is very long.
+        return cleaned[:87].rstrip(" ,.;:-") + "..."
+
+    async def _call_llm(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        max_tokens: int = 700,
+    ) -> Optional[str]:
         if not self._remote_enabled():
             logger.info("OpenRouter API key not configured. Using deterministic local fallback.")
             return None
@@ -153,6 +167,7 @@ class LLMService:
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.3,
+            "max_tokens": max_tokens,
             "response_format": {"type": "json_object"},
         }
         headers = {
@@ -192,37 +207,103 @@ class LLMService:
             return None
 
     def _fallback_quiz(self, topic: str, difficulty: str, num_questions: int, marks: int) -> QuizResponse:
-        keywords = self._extract_keywords(topic, fallback=[topic or "the topic"])
+        topic_label = self._normalize_topic_label(topic)
+        keywords = self._extract_keywords(topic_label, fallback=[topic_label or "the topic"])
         label = self._difficulty_label(difficulty)
         stems = [
-            "Which statement best describes {keyword} in the context of {topic}?",
-            "What is the most practical objective of {keyword}?",
-            "Which approach most directly improves outcomes for {keyword}?",
-            "Which indicator suggests good understanding of {keyword}?",
+            "In {context}, which approach best applies {keyword} for {topic}?",
+            "Which action most directly improves results in {keyword} work?",
+            "What is the best first step when implementing {keyword} in {context}?",
+            "Which practice shows a strong understanding of {keyword}?",
+            "Which choice best reduces risk when using {keyword}?",
+            "For a faculty team using {keyword}, which step should come next?",
+            "Which statement is most accurate about applying {keyword} in {topic}?",
+            "When evaluating progress in {keyword}, what should be prioritized?",
+            "Which method creates the most reliable outcome for {keyword} tasks?",
+            "What is the strongest way to validate a {keyword} solution?",
+            "Which option best aligns {keyword} work with measurable outcomes?",
+            "Which decision improves quality while using {keyword} in {context}?",
         ]
+        contexts = [
+            "assessment planning",
+            "course delivery",
+            "project execution",
+            "rubric design",
+            "student mentoring",
+            "content revision",
+            "lab practice",
+            "quality review",
+            "curriculum alignment",
+            "time-constrained testing",
+        ]
+        strong_actions = [
+            "define measurable objectives and success criteria before execution",
+            "test assumptions with a small pilot and refine from evidence",
+            "use structured checkpoints and document decisions",
+            "review outcomes against clear quality metrics and iterate",
+            "combine theory with hands-on validation using realistic cases",
+            "capture errors, root causes, and corrective steps after each run",
+            "compare alternatives against constraints before finalizing",
+            "use feedback loops to improve accuracy and consistency",
+        ]
+        weak_actions = [
+            "skip validation because the first attempt is usually enough",
+            "rely on assumptions without collecting evidence",
+            "ignore review checkpoints and postpone quality checks",
+            "treat the process as one-time with no iteration",
+            "optimize speed by removing all verification steps",
+            "copy old solutions without checking context fit",
+            "avoid documentation and depend only on memory",
+            "change multiple variables at once without tracking impact",
+        ]
+        labels = ["A", "B", "C", "D"]
         quiz: List[QuizQuestion] = []
         for index in range(num_questions):
             keyword = keywords[index % len(keywords)]
-            stem = stems[index % len(stems)].format(keyword=keyword, topic=topic or keyword)
-            correct = f"It applies the core principles of {keyword} in a structured way."
-            options = {
-                "A": correct,
-                "B": f"It ignores feedback and skips validation for {keyword}.",
-                "C": f"It treats {keyword} as a one-time activity with no iteration.",
-                "D": f"It replaces all planning with assumptions about {keyword}.",
-            }
+            context = contexts[(index + (index // len(contexts))) % len(contexts)]
+            stem = stems[index % len(stems)].format(keyword=keyword, topic=topic_label or keyword, context=context)
+
+            correct = (
+                f"It applies {keyword} by {strong_actions[index % len(strong_actions)]}."
+            )
+            wrong_candidates = [
+                f"It handles {keyword} by {weak_actions[(index + 1) % len(weak_actions)]}.",
+                f"It treats {keyword} as optional and delays core planning decisions.",
+                f"It focuses on appearance over measurable outcomes in {context}.",
+                f"It assumes {keyword} quality is guaranteed without testing.",
+                f"It removes feedback cycles to avoid rework in {topic_label}.",
+                f"It limits {keyword} to theory only and skips practical checks.",
+            ]
+
+            unique_wrongs: List[str] = []
+            for candidate in wrong_candidates:
+                if candidate not in unique_wrongs and candidate != correct:
+                    unique_wrongs.append(candidate)
+                if len(unique_wrongs) == 3:
+                    break
+
+            correct_label = labels[index % len(labels)]
+            options: Dict[str, str] = {}
+            wrong_index = 0
+            for option_label in labels:
+                if option_label == correct_label:
+                    options[option_label] = correct
+                else:
+                    options[option_label] = unique_wrongs[wrong_index]
+                    wrong_index += 1
+
             quiz.append(
                 QuizQuestion(
                     question_id=index + 1,
                     question=stem,
                     options=options,
-                    correct_answer="A",
+                    correct_answer=correct_label,
                     marks=marks,
                 )
             )
         return QuizResponse(
             metadata=QuizMetadata(
-                topic=topic,
+                topic=topic_label,
                 difficulty=label,
                 total_questions=num_questions,
                 marks_per_question=marks,
@@ -305,7 +386,10 @@ class LLMService:
                 option_c=item.options["C"],
                 option_d=item.options["D"],
                 correct_option=item.correct_answer,
-                explanation=f"The best answer is A because it reflects a sound practice for {topic}.",
+                explanation=(
+                    f"The best answer is {item.correct_answer} because it reflects structured, "
+                    f"evidence-based practice for {self._normalize_topic_label(topic)}."
+                ),
             )
             for item in quiz.quiz
         ]
@@ -392,6 +476,7 @@ class LLMService:
         avg_accuracy = float(performance_context.get("avg_accuracy", 0) or 0)
         weak_topics = performance_context.get("weak_topics", []) or []
         strong_topics = performance_context.get("strong_topics", []) or []
+        prompt = (user_message or "").lower()
 
         if total_tests == 0:
             return (
@@ -403,6 +488,33 @@ class LLMService:
 
         weak_line = weak_topics[0]["topic"] if weak_topics else "no major weak topic recorded"
         strong_line = strong_topics[0]["topic"] if strong_topics else "no strong topic recorded yet"
+
+        if any(term in prompt for term in ["improve", "score", "better", "increase"]):
+            recommendation = "revise fundamentals and retake a focused test" if avg_accuracy < 70 else "move to timed practice and advanced topics"
+            return (
+                f"To improve your score from {avg_accuracy:.1f}%:\n"
+                f"- Focus first on: {weak_line}\n"
+                "- Do 1 targeted practice set today and review each wrong answer.\n"
+                f"- Reattempt an official test after review.\n"
+                f"- Current strong area to retain: {strong_line}\n"
+                f"- Next step: {recommendation}."
+            )
+
+        if any(term in prompt for term in ["weak", "weakness", "where am i weak"]):
+            return (
+                f"Your weakest area is: {weak_line}\n"
+                f"- Average accuracy: {avg_accuracy:.1f}%\n"
+                "- Spend 30-45 minutes reviewing this topic.\n"
+                "- Then take a short focused practice set to confirm improvement."
+            )
+
+        if any(term in prompt for term in ["strong", "strength", "what am i good at"]):
+            return (
+                f"Your strongest area is: {strong_line}\n"
+                f"- Overall average: {avg_accuracy:.1f}%\n"
+                "- Keep this level by doing one revision test each week."
+            )
+
         recommendation = "revise fundamentals and retake a focused test" if avg_accuracy < 70 else "move to timed practice and advanced topics"
         return (
             f"Based on your current performance ({avg_accuracy:.1f}% average across {total_tests} tests):\n"
@@ -466,7 +578,8 @@ Output JSON structure ONLY:
   ]
 }}
 """
-        raw = await self._call_llm(prompt, system_prompt)
+        estimated_tokens = min(1800, max(500, num_questions * 130))
+        raw = await self._call_llm(prompt, system_prompt, max_tokens=estimated_tokens)
         if not raw:
             return self._fallback_quiz(topic, difficulty, num_questions, marks)
         return self._validate_json(raw, QuizResponse) or self._fallback_quiz(topic, difficulty, num_questions, marks)
@@ -485,7 +598,7 @@ Respond strictly in valid JSON format.
 Analyze the following structured performance report:
 {json.dumps(report_data, indent=2)}
 """
-        raw = await self._call_llm(prompt, system_prompt)
+        raw = await self._call_llm(prompt, system_prompt, max_tokens=500)
         if not raw:
             return self._fallback_analysis(report_data)
         return self._validate_json(raw, SkillGapResponse) or self._fallback_analysis(report_data)
@@ -512,7 +625,7 @@ Current Level: {current_level}
 Target Level: {target_level}
 Weekly Hours: {weekly_hours}
 """
-        raw = await self._call_llm(prompt, system_prompt)
+        raw = await self._call_llm(prompt, system_prompt, max_tokens=700)
         if not raw:
             return self._fallback_roadmap(skill, domain, current_level, target_level, weekly_hours)
         return self._validate_json(raw, RoadmapAI) or self._fallback_roadmap(skill, domain, current_level, target_level, weekly_hours)
@@ -523,7 +636,7 @@ Weekly Hours: {weekly_hours}
 
         system_prompt = "Generate multiple choice practice questions in strict JSON."
         prompt = f"Topic: {topic}\nDifficulty: {difficulty}\nCount: {count}"
-        raw = await self._call_llm(prompt, system_prompt)
+        raw = await self._call_llm(prompt, system_prompt, max_tokens=900)
         if not raw:
             return self._fallback_practice_questions(topic, difficulty, count)
         return self._validate_json(raw, PracticeQuestionResponseAI) or self._fallback_practice_questions(topic, difficulty, count)
@@ -534,7 +647,7 @@ Weekly Hours: {weekly_hours}
 
         system_prompt = "Suggest complementary faculty development skills in strict JSON."
         prompt = f"Department: {department}\nCurrent Skills: {', '.join(current_skills)}"
-        raw = await self._call_llm(prompt, system_prompt)
+        raw = await self._call_llm(prompt, system_prompt, max_tokens=350)
         if not raw:
             return self._fallback_skill_suggestions(current_skills, department)
         return self._validate_json(raw, SkillSuggestionsAI) or self._fallback_skill_suggestions(current_skills, department)
@@ -551,7 +664,7 @@ Weekly Hours: {weekly_hours}
 
         system_prompt = "Create a week-by-week learning roadmap in strict JSON."
         prompt = f"Skill: {skill}\nWeeks: {weeks}\nHours per week: {hours_per_week}\nCurrent level: {current_level}"
-        raw = await self._call_llm(prompt, system_prompt)
+        raw = await self._call_llm(prompt, system_prompt, max_tokens=350)
         if not raw:
             return self._fallback_learning_roadmap(skill, weeks, hours_per_week, current_level)
         return self._validate_json(raw, LearningRoadmapAI) or self._fallback_learning_roadmap(skill, weeks, hours_per_week, current_level)
@@ -585,9 +698,14 @@ Weekly Hours: {weekly_hours}
             )
 
         messages = [{"role": "system", "content": context_block}]
-        messages.extend(conversation_history)
+        messages.extend(conversation_history[-8:])
         messages.append({"role": "user", "content": user_message})
-        payload = {"model": self.model, "messages": messages, "temperature": 0.5}
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.4,
+            "max_tokens": 280,
+        }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -632,6 +750,7 @@ Weekly Hours: {weekly_hours}
                 },
             ],
             "temperature": 0.3,
+            "max_tokens": 260,
             "response_format": {"type": "json_object"},
         }
         headers = {
