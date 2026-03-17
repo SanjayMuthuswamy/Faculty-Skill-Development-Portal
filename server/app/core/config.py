@@ -1,4 +1,5 @@
 import json
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from typing import Literal
 
 from pydantic import field_validator, model_validator
@@ -94,6 +95,45 @@ class Settings(BaseSettings):
                     pass
             return [item.strip() for item in stripped.split(",") if item.strip()]
         return value
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def _normalize_asyncpg_ssl_param(cls, value):
+        """Normalize DB URL for async runtime and asyncpg SSL parameters."""
+        if not isinstance(value, str):
+            return value
+        normalized = value
+        if normalized.startswith("postgresql://"):
+            normalized = normalized.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif normalized.startswith("postgres://"):
+            normalized = normalized.replace("postgres://", "postgresql+asyncpg://", 1)
+
+        if not normalized.startswith("postgresql+asyncpg://"):
+            return normalized
+
+        parts = urlsplit(normalized)
+        if not parts.query:
+            return normalized
+
+        query_pairs = parse_qsl(parts.query, keep_blank_values=True)
+        has_ssl = any(k == "ssl" for k, _ in query_pairs)
+        if has_ssl:
+            return normalized
+
+        updated = False
+        normalized_pairs: list[tuple[str, str]] = []
+        for key, val in query_pairs:
+            if key == "sslmode":
+                normalized_pairs.append(("ssl", val))
+                updated = True
+            else:
+                normalized_pairs.append((key, val))
+
+        if not updated:
+            return normalized
+
+        new_query = urlencode(normalized_pairs)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
 
     @model_validator(mode="after")
     def _apply_production_defaults(self):
