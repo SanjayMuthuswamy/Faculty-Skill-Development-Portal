@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/providers/AuthProvider';
-import { facultyApi, SkillStatus } from '../../lib/api/faculty';
+import { facultyApi, resolveBackendAssetUrl } from '../../lib/api/faculty';
 import http from '../../lib/api/http';
 import { SkillDomain } from '../../lib/api/skills';
 import { testsApi } from '../../lib/api/tests';
 import { attemptsApi } from '../../lib/api/attempts';
+import { enrollmentsApi } from '../../lib/api/enrollments';
+import { EnrollmentStatus } from '../../lib/api/programs';
 import { queriesApi } from '../../lib/api/forum';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -21,10 +23,9 @@ import {
     Briefcase,
     Plus,
     Trash2,
-    Edit2,
     CheckCircle2,
-    Sparkles,
     RefreshCw,
+    Sparkles,
     Loader2,
     Award,
     MessageSquarePlus,
@@ -33,60 +34,7 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import { FacultySkill } from '../../lib/types';
-import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
-
-function SkillSuggestions() {
-    const { data: suggestions, isLoading, refetch, isFetching } = useQuery({
-        queryKey: ['skill-suggestions'],
-        queryFn: () => facultyApi.getSkillSuggestions(),
-        staleTime: 1000 * 60 * 30, // 30 mins
-    });
-
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                <div className="relative">
-                    <div className="h-12 w-12 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
-                    <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-5 w-5 text-indigo-500 animate-pulse" />
-                </div>
-                <p className="text-sm text-slate-500 font-semibold tracking-tight">AI is analyzing your expertise...</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-5">
-            <div className="flex flex-wrap gap-2">
-                {suggestions?.suggested_skills.map((skill, i) => (
-                    <Badge key={i} variant="secondary" className="bg-white/80 hover:bg-white border-white/40 text-indigo-700 px-3 py-1.5 rounded-xl shadow-sm backdrop-blur-sm font-semibold">
-                        {skill}
-                    </Badge>
-                ))}
-            </div>
-
-            <div className="p-4 rounded-2xl bg-indigo-600 shadow-xl shadow-indigo-600/20 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                    <Sparkles className="h-12 w-12 text-white" />
-                </div>
-                <p className="text-xs text-indigo-50 leading-relaxed font-semibold relative z-10">
-                    "{suggestions?.reasoning}"
-                </p>
-            </div>
-
-            <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 h-10 gap-2 rounded-xl group"
-                onClick={() => refetch()}
-                disabled={isFetching}
-            >
-                <RefreshCw className={cn("h-4 w-4 transition-all duration-500", isFetching ? "animate-spin" : "group-hover:rotate-180")} />
-                UPDATE INSIGHTS
-            </Button>
-        </div>
-    );
-}
 
 export default function FacultyProfile() {
     const { user } = useAuth();
@@ -95,12 +43,12 @@ export default function FacultyProfile() {
     const queryClient = useQueryClient();
     const [isSkillModalOpen, setIsSkillModalOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    const [editingSkill, setEditingSkill] = useState<any | null>(null);
     const [profileForm, setProfileForm] = useState({
         department: '',
         designation: '',
         experience_years: '',
     });
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { data: profile } = useQuery({
         queryKey: ['faculty-profile', 'me'],
@@ -109,26 +57,19 @@ export default function FacultyProfile() {
     });
 
     const skills = profile?.skills || [];
-    const { register, handleSubmit, reset, setValue } = useForm<Omit<FacultySkill, 'id'>>();
+    const { register, handleSubmit, reset } = useForm<Omit<FacultySkill, 'id'>>();
 
     const addSkillMutation = useMutation({
-        mutationFn: (data: { skill_name: string, domain: string, level: number }) => facultyApi.addSkill(data),
+        mutationFn: (data: { skill_name: string }) =>
+            facultyApi.addSkill({
+                skill_name: data.skill_name,
+                domain: SkillDomain.TECHNOLOGY,
+                level: 3,
+            }),
         onSuccess: () => {
             addToast('New skill unlocked!', 'success');
             queryClient.invalidateQueries({ queryKey: ['faculty-profile', 'me'] });
             setIsSkillModalOpen(false);
-            reset();
-        },
-    });
-
-    const updateSkillMutation = useMutation({
-        mutationFn: (data: { id: string; updates: { level: number } }) =>
-            http.patch(`/api/v1/faculty/me/skills/${data.id}`, data.updates).then(r => r.data),
-        onSuccess: () => {
-            addToast('Level updated!', 'success');
-            queryClient.invalidateQueries({ queryKey: ['faculty-profile', 'me'] });
-            setIsSkillModalOpen(false);
-            setEditingSkill(null);
             reset();
         },
     });
@@ -157,34 +98,25 @@ export default function FacultyProfile() {
         },
     });
 
-    const onSubmit = (data: any) => {
-        if (editingSkill) {
-            updateSkillMutation.mutate({ id: editingSkill.id, updates: { level: parseInt(data.level) } });
-        } else {
-            const category = data.category as string;
-            const mappedDomain =
-                category === 'technical'
-                    ? SkillDomain.TECHNOLOGY
-                    : category === 'pedagogy'
-                        ? SkillDomain.TEACHING
-                        : SkillDomain.COMMUNICATION;
-            addSkillMutation.mutate({
-                skill_name: data.name,
-                domain: mappedDomain,
-                level: parseInt(data.level)
-            });
-        }
-    };
+    const uploadProfileImageMutation = useMutation({
+        mutationFn: (file: File) => facultyApi.uploadProfileImage(file),
+        onSuccess: () => {
+            addToast('Profile picture updated', 'success');
+            queryClient.invalidateQueries({ queryKey: ['faculty-profile', 'me'] });
+        },
+        onError: (error: any) => {
+            const detail = error?.response?.data?.detail;
+            addToast(typeof detail === 'string' ? detail : 'Failed to upload image', 'error');
+        },
+    });
 
-    const handleEdit = (skill: any) => {
-        setEditingSkill(skill);
-        setValue('name' as any, skill.skill?.name ?? skill.name ?? '');
-        setValue('level' as any, String(skill.level));
-        setIsSkillModalOpen(true);
+    const onSubmit = (data: any) => {
+        addSkillMutation.mutate({
+            skill_name: data.name,
+        });
     };
 
     const handleOpenAdd = () => {
-        setEditingSkill(null);
         reset();
         setIsSkillModalOpen(true);
     };
@@ -196,6 +128,19 @@ export default function FacultyProfile() {
             experience_years: profile?.experience_years != null ? String(profile.experience_years) : '',
         });
         setIsProfileModalOpen(true);
+    };
+
+    const triggerProfileImageUpload = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleProfileImageSelected = (event: ChangeEvent<HTMLInputElement>) => {
+        const selectedFile = event.target.files?.[0];
+        event.target.value = '';
+        if (!selectedFile) {
+            return;
+        }
+        uploadProfileImageMutation.mutate(selectedFile);
     };
 
     const handlePublicView = async () => {
@@ -230,6 +175,11 @@ export default function FacultyProfile() {
     const attemptsQuery = useQuery({
         queryKey: ['attempts-profile', user?.id],
         queryFn: attemptsApi.getMyAttempts,
+        enabled: !!user,
+    });
+    const programEnrollmentsQuery = useQuery({
+        queryKey: ['program-enrollments-profile', user?.id],
+        queryFn: enrollmentsApi.getMyEnrollments,
         enabled: !!user,
     });
 
@@ -274,6 +224,84 @@ export default function FacultyProfile() {
         );
     }, [attemptsQuery.data, testsQuery.data]);
 
+    const profileInsights = useMemo(() => {
+        const attempts = (attemptsQuery.data || []).filter((a) => !!a.submitted_at);
+        const avgAccuracy = attempts.length
+            ? Math.round(attempts.reduce((acc, a) => acc + (a.accuracy || 0), 0) / attempts.length)
+            : 0;
+
+        const recent = [...attempts]
+            .sort((a, b) => new Date(b.submitted_at || b.started_at).getTime() - new Date(a.submitted_at || a.started_at).getTime())
+            .slice(0, 3);
+        const recentAvg = recent.length
+            ? Math.round(recent.reduce((acc, a) => acc + (a.accuracy || 0), 0) / recent.length)
+            : 0;
+
+        const domainStats = new Map<string, { total: number; count: number }>();
+        attempts.forEach((a) => {
+            const domain = (a.domain || 'General').trim();
+            const existing = domainStats.get(domain) || { total: 0, count: 0 };
+            existing.total += a.accuracy || 0;
+            existing.count += 1;
+            domainStats.set(domain, existing);
+        });
+        const weakestDomain = Array.from(domainStats.entries())
+            .map(([domain, stat]) => ({ domain, avg: stat.total / stat.count }))
+            .sort((a, b) => a.avg - b.avg)[0]?.domain;
+
+        const currentSkills = (skills || []).map((s) => s.skill.name);
+        const existingSkillSet = new Set(currentSkills.map((s) => s.toLowerCase()));
+
+        const skillBankByDomain: Record<string, string[]> = {
+            ai: ['Prompt Engineering', 'Applied Machine Learning', 'Model Evaluation', 'AI Ethics'],
+            python: ['Python Advanced', 'API Design', 'Data Structures', 'Async Programming'],
+            cloud: ['Cloud Architecture', 'DevOps Basics', 'CI/CD', 'System Design'],
+            communication: ['Technical Communication', 'Presentation Skills', 'Mentoring', 'Stakeholder Management'],
+            teaching: ['Outcome-based Assessment', 'Instructional Design', 'Rubric Design', 'Classroom Analytics'],
+            general: ['Problem Solving', 'Project Planning', 'Data Interpretation', 'Documentation'],
+        };
+
+        const weakKey = (weakestDomain || '').toLowerCase();
+        let bank = skillBankByDomain.general;
+        if (weakKey.includes('ai')) bank = skillBankByDomain.ai;
+        else if (weakKey.includes('python')) bank = skillBankByDomain.python;
+        else if (weakKey.includes('cloud')) bank = skillBankByDomain.cloud;
+        else if (weakKey.includes('comm')) bank = skillBankByDomain.communication;
+        else if (weakKey.includes('teach') || weakKey.includes('pedagog')) bank = skillBankByDomain.teaching;
+
+        const completedCourseTrainings = (profile?.course_enrollments || []).filter((e) => !!e.completed_at).length;
+        const activeCourseTrainings = (profile?.course_enrollments || []).filter((e) => !e.completed_at).length;
+        const completedProgramTrainings = (programEnrollmentsQuery.data || []).filter((e) => e.status === EnrollmentStatus.COMPLETED).length;
+        const activeProgramTrainings = (programEnrollmentsQuery.data || []).filter((e) => e.status === EnrollmentStatus.ENROLLED).length;
+
+        const totalCompletedTrainings = completedCourseTrainings + completedProgramTrainings;
+        const totalActiveTrainings = activeCourseTrainings + activeProgramTrainings;
+        const hasAnyProfileData = attempts.length > 0 || currentSkills.length > 0 || totalCompletedTrainings > 0 || totalActiveTrainings > 0;
+
+        let suggestions: string[] = [];
+        if (hasAnyProfileData) {
+            suggestions = bank.filter((s) => !existingSkillSet.has(s.toLowerCase())).slice(0, 4);
+            if (suggestions.length < 4) {
+                const fallback = [...skillBankByDomain.general, ...skillBankByDomain.teaching, ...skillBankByDomain.communication]
+                    .filter((s) => !existingSkillSet.has(s.toLowerCase()) && !suggestions.includes(s));
+                suggestions = [...suggestions, ...fallback].slice(0, 4);
+            }
+        }
+
+        const insight = attempts.length === 0
+            ? `No activity data yet. Add skills, enroll in training, or complete a test to generate personalized insights.`
+            : `Average score: ${avgAccuracy}% across ${attempts.length} completed test${attempts.length > 1 ? 's' : ''}. Recent trend: ${recentAvg}%. ` +
+            `Training completed: ${totalCompletedTrainings}, active: ${totalActiveTrainings}. ` +
+            (weakestDomain ? `Biggest improvement area: ${weakestDomain}.` : `Keep building consistency across topics.`);
+
+        return {
+            suggestions,
+            insight,
+        };
+    }, [attemptsQuery.data, programEnrollmentsQuery.data, profile?.course_enrollments, skills]);
+
+    const profileImageUrl = resolveBackendAssetUrl(profile?.profile_image_url);
+
     if (!user) return null;
 
     return (
@@ -291,12 +319,32 @@ export default function FacultyProfile() {
                 {/* Profile Info Overlay */}
                 <div className="px-10 pb-10 flex flex-col md:flex-row items-end gap-8 -mt-20 relative z-10">
                     <div className="relative group/avatar">
-                        <div className="h-44 w-44 rounded-[40px] border-[8px] border-white bg-slate-100 flex items-center justify-center text-5xl font-bold text-blue-600 shadow-xl overflow-hidden shadow-blue-900/10">
-                            {user.name.charAt(0)}
+                        <button
+                            type="button"
+                            onClick={triggerProfileImageUpload}
+                            className="relative h-44 w-44 rounded-[40px] border-[8px] border-white bg-slate-100 flex items-center justify-center text-5xl font-bold text-blue-600 shadow-xl overflow-hidden shadow-blue-900/10"
+                            disabled={uploadProfileImageMutation.isPending}
+                        >
+                            {profileImageUrl ? (
+                                <img src={profileImageUrl} alt={`${user.name} profile`} className="h-full w-full object-cover" />
+                            ) : (
+                                user.name.charAt(0)
+                            )}
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
-                                <Plus className="h-8 w-8 text-white" />
+                                {uploadProfileImageMutation.isPending ? (
+                                    <Loader2 className="h-8 w-8 text-white animate-spin" />
+                                ) : (
+                                    <Plus className="h-8 w-8 text-white" />
+                                )}
                             </div>
-                        </div>
+                        </button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            className="hidden"
+                            onChange={handleProfileImageSelected}
+                        />
                         <div className="absolute -bottom-2 -right-2 h-12 w-12 rounded-2xl bg-emerald-500 border-4 border-white flex items-center justify-center text-white shadow-lg">
                             <ShieldCheck className="h-6 w-6" />
                         </div>
@@ -317,6 +365,20 @@ export default function FacultyProfile() {
                     </div>
 
                     <div className="flex gap-3 pb-4">
+                        <Button
+                            onClick={triggerProfileImageUpload}
+                            className="rounded-2xl h-14 px-8 font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all"
+                            disabled={uploadProfileImageMutation.isPending}
+                        >
+                            {uploadProfileImageMutation.isPending ? (
+                                <span className="inline-flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    UPLOADING...
+                                </span>
+                            ) : (
+                                'UPLOAD PHOTO'
+                            )}
+                        </Button>
                         <Button
                             onClick={handleOpenProfileEdit}
                             className="rounded-2xl h-14 px-8 font-bold bg-white text-slate-900 border-2 border-slate-100 shadow-xl shadow-slate-200/50 hover:bg-slate-50 transition-all"
@@ -345,20 +407,46 @@ export default function FacultyProfile() {
                                 AI Recommendations
                             </CardTitle>
                         </CardHeader>
-                        <SkillSuggestions />
+                        <div className="space-y-5">
+                            <div className="flex flex-wrap gap-2">
+                                {profileInsights.suggestions.map((skill, i) => (
+                                    <Badge key={`${skill}-${i}`} variant="secondary" className="bg-white/80 hover:bg-white border-white/40 text-indigo-700 px-3 py-1.5 rounded-xl shadow-sm backdrop-blur-sm font-semibold">
+                                        {skill}
+                                    </Badge>
+                                ))}
+                            </div>
+
+                            <div className="p-4 rounded-2xl bg-indigo-600 shadow-xl shadow-indigo-600/20 relative overflow-hidden">
+                                <p className="text-xs text-indigo-50 leading-relaxed font-semibold">
+                                    {profileInsights.insight}
+                                </p>
+                            </div>
+
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 h-10 gap-2 rounded-xl"
+                                onClick={() => {
+                                    attemptsQuery.refetch();
+                                    programEnrollmentsQuery.refetch();
+                                    queryClient.invalidateQueries({ queryKey: ['faculty-profile', 'me'] });
+                                }}
+                                disabled={attemptsQuery.isFetching || programEnrollmentsQuery.isFetching}
+                            >
+                                <RefreshCw className={(attemptsQuery.isFetching || programEnrollmentsQuery.isFetching) ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                                UPDATE INSIGHTS
+                            </Button>
+                        </div>
                     </Card>
-
-
                 </div>
-
-                {/* ── MAIN CONTENT: SKILLS & COURSES ────────────────────── */}
+                {/* MAIN CONTENT: SKILLS & COURSES */}
                 <div className="md:col-span-2 space-y-10">
                     {/* Skills Matrix */}
                     <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[40px] bg-white">
                         <CardHeader className="p-10 pb-0 flex flex-row items-center justify-between">
                             <div>
                                 <CardTitle className="text-2xl font-bold text-slate-900 tracking-tight">Expertise Matrix</CardTitle>
-                                <CardDescription className="text-slate-400 font-semibold mt-1 uppercase tracking-widest text-[10px]">Technical & Pedagogical Standing</CardDescription>
+                                <CardDescription className="text-slate-400 font-semibold mt-1 uppercase tracking-widest text-[10px]">Your Skills</CardDescription>
                             </div>
                             <Button onClick={handleOpenAdd} size="icon" className="h-14 w-14 rounded-2xl bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-600/30 text-white">
                                 <Plus className="h-7 w-7" />
@@ -370,16 +458,13 @@ export default function FacultyProfile() {
                                     <TableHeader className="bg-white">
                                         <TableRow className="hover:bg-transparent border-slate-100">
                                             <TableHead className="font-bold text-slate-900 py-6 pl-8">SKILL</TableHead>
-                                            <TableHead className="font-semibold text-slate-400 uppercase tracking-widest text-[10px] py-6">CATEGORY</TableHead>
-                                            <TableHead className="font-semibold text-slate-400 uppercase tracking-widest text-[10px] py-6">LEVEL</TableHead>
-                                            <TableHead className="font-semibold text-slate-400 uppercase tracking-widest text-[10px] py-6">STATUS</TableHead>
                                             <TableHead className="text-right py-6 pr-8"></TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {skills?.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={5} className="text-center py-20">
+                                                <TableCell colSpan={2} className="text-center py-20">
                                                     <div className="flex flex-col items-center">
                                                         <div className="h-20 w-20 rounded-full bg-slate-100 flex items-center justify-center mb-4">
                                                             <Briefcase className="h-8 w-8 text-slate-300" />
@@ -392,34 +477,8 @@ export default function FacultyProfile() {
                                         ) : skills?.map((skill) => (
                                             <TableRow key={skill.id} className="hover:bg-white group transition-colors border-slate-50">
                                                 <TableCell className="font-bold text-slate-900 py-6 pl-8">{skill.skill.name}</TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className="capitalize bg-white border-slate-200 text-slate-600 font-semibold h-7 rounded-lg">{skill.skill.domain}</Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-1.5">
-                                                        {[1, 2, 3, 4, 5].map(lv => (
-                                                            <div key={lv} className={cn(
-                                                                "h-1.5 w-6 rounded-full transition-all duration-500",
-                                                                lv <= skill.level
-                                                                    ? skill.level >= 4 ? "bg-emerald-500 shadow-sm shadow-emerald-500/20" : "bg-blue-500 shadow-sm shadow-blue-500/20"
-                                                                    : "bg-slate-200"
-                                                            )} />
-                                                        ))}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge className={cn(
-                                                        "font-bold uppercase tracking-widest text-[9px] h-7 rounded-lg shadow-sm border-none",
-                                                        skill.status === SkillStatus.VERIFIED ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-                                                    )}>
-                                                        {skill.status === SkillStatus.VERIFIED ? "Verified" : "Self-Declared"}
-                                                    </Badge>
-                                                </TableCell>
                                                 <TableCell className="text-right py-6 pr-8">
                                                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(skill)} className="h-9 w-9 rounded-xl hover:bg-slate-100">
-                                                            <Edit2 className="h-4 w-4 text-slate-400" />
-                                                        </Button>
                                                         <Button variant="ghost" size="icon" onClick={() => deleteSkillMutation.mutate(skill.id)} className="h-9 w-9 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-colors">
                                                             <Trash2 className="h-4 w-4" />
                                                         </Button>
@@ -564,39 +623,18 @@ export default function FacultyProfile() {
             </div>
 
             {/* MODALS */}
-            <Modal isOpen={isSkillModalOpen} onClose={() => setIsSkillModalOpen(false)} title={editingSkill ? "Refine Expertise" : "Add Skill"}>
+            <Modal isOpen={isSkillModalOpen} onClose={() => setIsSkillModalOpen(false)} title="Add Skill">
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pt-4 px-2">
                     <Input
-                        label="Skill Definition"
+                        label="Skill Name"
                         {...register('name', { required: true })}
-                        placeholder="e.g. Advanced Machine Learning"
+                        placeholder="e.g. Python Programming"
                         className="rounded-2xl h-12"
                     />
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest ml-1">Domain</label>
-                            <select className="w-full h-12 rounded-xl bg-slate-50 border border-slate-200 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-600/20" {...register('category')}>
-                                <option value="technical">Technical</option>
-                                <option value="pedagogy">Pedagogy</option>
-                                <option value="soft-skills">Soft Skills</option>
-                            </select>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest ml-1">Skill Level</label>
-                            <select className="w-full h-12 rounded-xl bg-slate-50 border border-slate-200 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-600/20" {...register('level')}>
-                                <option value="1">1 - Foundation</option>
-                                <option value="2">2 - Practicing</option>
-                                <option value="3">3 - Competent</option>
-                                <option value="4">4 - Advanced</option>
-                                <option value="5">5 - Master</option>
-                            </select>
-                        </div>
-                    </div>
-
                     <div className="flex gap-3 pt-4">
                         <Button type="button" variant="ghost" onClick={() => setIsSkillModalOpen(false)} className="flex-1 h-12 rounded-2xl font-bold">Cancel</Button>
-                        <Button type="submit" className="flex-1 h-12 rounded-2xl font-bold bg-blue-600 text-white shadow-lg shadow-blue-600/20">{editingSkill ? "Update Level" : "Integrate Skill"}</Button>
+                        <Button type="submit" className="flex-1 h-12 rounded-2xl font-bold bg-blue-600 text-white shadow-lg shadow-blue-600/20">Add Skill</Button>
                     </div>
                 </form>
             </Modal>
@@ -636,3 +674,6 @@ export default function FacultyProfile() {
         </div>
     );
 }
+
+
+

@@ -3,6 +3,8 @@ import { useMutation } from '@tanstack/react-query';
 import { aiCoachApi, ChatMessage } from '../../lib/api/aiCoach';
 import { useNavigate } from 'react-router-dom';
 import { Bot, Send, Loader2, Sparkles, RotateCcw } from 'lucide-react';
+import { useToast } from '../../components/ui/Toast';
+import { getApiErrorMessage } from '../../lib/api/error';
 
 const QUICK_ACTIONS = [
     'Where am I weak?',
@@ -52,6 +54,7 @@ function MessageBubble({ msg, onAction }: { msg: ChatMessage; onAction: (url: st
 
 export default function AICoachPage() {
     const navigate = useNavigate();
+    const { addToast } = useToast();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<ChatMessage[]>([{
         role: 'assistant',
@@ -69,11 +72,12 @@ export default function AICoachPage() {
                 { role: 'assistant', content: data.reply, actions: data.actions || [] },
             ]);
         },
-        onError: () => {
+        onError: (error) => {
             setMessages(prev => [
                 ...prev,
                 { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' },
             ]);
+            addToast(getApiErrorMessage(error, 'AI coach request failed'), 'error');
         },
     });
 

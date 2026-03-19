@@ -1,5 +1,6 @@
 
 from datetime import datetime, timezone
+from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy import String, Integer, ForeignKey, DateTime
@@ -15,6 +16,7 @@ class FacultyProfile(Base):
     department: Mapped[str] = mapped_column(String, nullable=True)
     designation: Mapped[str] = mapped_column(String, nullable=True)
     experience_years: Mapped[int] = mapped_column(Integer, default=0)
+    profile_image_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships

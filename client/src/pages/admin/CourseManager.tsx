@@ -4,6 +4,7 @@ import { coursesApi, Course, CourseModule, ModuleQuiz, AdminAssessmentQuestion }
 import { Plus, Trash2, ChevronDown, ChevronRight, Edit2, Eye, EyeOff, Loader2, X, Save } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useToast } from '../../components/ui/Toast';
+import { getApiErrorMessage } from '../../lib/api/error';
 
 type ModalMode = 'course' | 'module' | 'quiz' | 'assessment' | null;
 
@@ -161,7 +162,7 @@ export default function CourseManagerPage() {
             addToast(`Generated ${res.generated_count} quiz question(s)`, 'success');
             setModal({ mode: null });
         },
-        onError: () => addToast('AI generation failed for module quiz.', 'error'),
+        onError: (error) => addToast(getApiErrorMessage(error, 'AI generation failed for module quiz.'), 'error'),
     });
 
     const generateAssessmentMutation = useMutation({
@@ -173,7 +174,7 @@ export default function CourseManagerPage() {
             addToast(`Generated ${res.generated_count} assessment question(s)`, 'success');
             setModal({ mode: null });
         },
-        onError: () => addToast('AI generation failed for assessment.', 'error'),
+        onError: (error) => addToast(getApiErrorMessage(error, 'AI generation failed for assessment.'), 'error'),
     });
 
     const openModal = (mode: ModalMode, partial?: Partial<ModalState>, initial?: Record<string, any>) => {

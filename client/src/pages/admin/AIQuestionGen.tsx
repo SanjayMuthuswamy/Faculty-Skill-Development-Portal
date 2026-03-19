@@ -9,6 +9,7 @@ import { Sparkles, History, ArrowRight, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { SkillDomain } from '../../lib/api/skills';
 import { Difficulty } from '../../lib/api/tests';
+import { getApiErrorMessage } from '../../lib/api/error';
 
 export default function AIQuestionGen() {
     const { addToast } = useToast();
@@ -31,8 +32,8 @@ export default function AIQuestionGen() {
             queryClient.invalidateQueries({ queryKey: ['questionDrafts'] });
             navigate(`/admin/draft-review/${newDraft.id}`);
         },
-        onError: () => {
-            addToast('Failed to generate draft', 'destructive');
+        onError: (error) => {
+            addToast(getApiErrorMessage(error, 'Failed to generate draft'), 'destructive');
         }
     });
 

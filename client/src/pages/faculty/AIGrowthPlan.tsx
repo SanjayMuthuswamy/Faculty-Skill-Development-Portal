@@ -9,6 +9,8 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Sparkles, RefreshCw, CheckCircle2, BookOpen, Activity, Target, ChevronRight, TrendingUp, Calendar, ArrowRight, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useToast } from '../../components/ui/Toast';
+import { getApiErrorMessage } from '../../lib/api/error';
 
 const SKILL_LEVELS = [
     { value: 'beginner', label: 'Beginner', desc: 'Starting from fundamentals' },
@@ -22,11 +24,12 @@ export default function AIGrowthPlan() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const { addToast } = useToast();
     const [showForm, setShowForm] = useState(false);
     const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({});
-    const [rmSkillMode, setRmSkillMode] = useState<'predefined' | 'custom'>('predefined');
+    const [rmSkillMode, setRmSkillMode] = useState<'predefined' | 'custom'>('custom');
     const [rmSelectedSkill, setRmSelectedSkill] = useState('');
-    const [rmCustomSkill, setRmCustomSkill] = useState('');
+    const [rmCustomSkill, setRmCustomSkill] = useState('Professional Development');
     const [rmWeeks, setRmWeeks] = useState(4);
     const [rmHours, setRmHours] = useState(10);
     const [rmLevel, setRmLevel] = useState<string>('beginner');
@@ -46,12 +49,16 @@ export default function AIGrowthPlan() {
             setExpandedWeeks({});
             queryClient.invalidateQueries({ queryKey: ['roadmap-latest'] });
         },
+        onError: (error) => {
+            addToast(getApiErrorMessage(error, 'Failed to generate roadmap'), 'error');
+        },
     });
 
     const progressMutation = useMutation({
         mutationFn: (data: { roadmapId: string; week: number; item_type: 'goal' | 'practice'; item_index: number; completed: boolean }) =>
             roadmapsApi.updateProgress(data.roadmapId, { week: data.week, item_type: data.item_type, item_index: data.item_index, completed: data.completed }),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap-latest'] }),
+        onError: (error) => addToast(getApiErrorMessage(error, 'Failed to update roadmap progress'), 'error'),
     });
 
     const effectiveSkill = rmSkillMode === 'custom' ? rmCustomSkill.trim() : rmSelectedSkill;
@@ -105,7 +112,7 @@ export default function AIGrowthPlan() {
                         </div>
                         <div className="flex items-center gap-2">
                             <Button variant="outline" className="rounded-xl border-blue-200 text-blue-700 hover:bg-blue-50" onClick={() => navigate('/faculty/practice')}>Open Practice</Button>
-                            <Button className="rounded-xl bg-slate-900 hover:bg-slate-800" onClick={() => { setShowForm(true); setRmSelectedSkill(''); setRmCustomSkill(''); setRmWeeks(4); setRmHours(10); setRmLevel('beginner'); generateMutation.reset(); }}><RefreshCw className="h-4 w-4 mr-2" />New Plan</Button>
+                            <Button className="rounded-xl bg-slate-900 hover:bg-slate-800" onClick={() => { setShowForm(true); setRmSelectedSkill(''); setRmCustomSkill('Professional Development'); setRmWeeks(4); setRmHours(10); setRmLevel('beginner'); generateMutation.reset(); }}><RefreshCw className="h-4 w-4 mr-2" />New Plan</Button>
                         </div>
                     </div>
                     <div className="mt-5 grid gap-3 md:grid-cols-4">
@@ -175,6 +182,9 @@ export default function AIGrowthPlan() {
                                     {rmCustomSkill.length > 0 && !isCustomValid && <p className="text-xs text-red-600 font-medium">Skill name must be between 2 and 60 characters.</p>}
                                     <p className="text-xs text-slate-500 text-right">{rmCustomSkill.length}/60</p>
                                 </div>
+                            )}
+                            {rmSkillMode === 'predefined' && (!allSkills || allSkills.length === 0) && (
+                                <p className="text-xs text-amber-600 font-medium">No skills found in library. Switch to custom skill to generate roadmap.</p>
                             )}
                         </div>
                         <div className="space-y-3">

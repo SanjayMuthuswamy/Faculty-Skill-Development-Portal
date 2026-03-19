@@ -98,12 +98,19 @@ class AICoachService:
 
         actions: List[Dict[str, str]] = []
         for _, test in ranked_tests[:3]:
+            pass_mark = test.pass_marks
+            total_questions = test.total_questions or 0
+            # Some older test records store low absolute values; render safely.
+            if total_questions and pass_mark <= 10:
+                pass_mark_text = f"{pass_mark}/{total_questions}"
+            else:
+                pass_mark_text = f"{pass_mark}%"
             actions.append(
                 {
                     "kind": "test",
                     "label": f"Take Test: {test.title}",
                     "url": f"/faculty/tests/{test.id}/play",
-                    "description": f"Pass mark: {test.pass_marks}% | Time: {test.time_limit_minutes} minutes",
+                    "description": f"Pass mark: {pass_mark_text} | Time: {test.time_limit_minutes} minutes",
                 }
             )
 

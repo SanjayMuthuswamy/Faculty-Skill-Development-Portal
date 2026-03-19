@@ -33,6 +33,7 @@ class FacultyProfileUpdate(FacultyProfileBase):
 class FacultyProfileInDBBase(FacultyProfileBase):
     id: str
     user_id: str
+    profile_image_url: Optional[str] = None
     created_at: datetime
 
     class Config:
