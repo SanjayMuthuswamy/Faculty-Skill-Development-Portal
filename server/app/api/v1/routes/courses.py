@@ -13,6 +13,7 @@ from app.services.course_service import CourseService
 from app.services.llm_service import LLMService
 from app.schemas.course import (
     CourseCreate, CourseUpdate, CourseOut, CourseListOut,
+    CourseBulkCreateRequest,
     CourseModuleCreate, CourseModuleUpdate, CourseModuleOut,
     ModuleQuizCreate, ModuleQuizUpdate, ModuleQuizOut,
     AssessmentQuestionCreate, AssessmentQuestionUpdate, AssessmentQuestionOut, AssessmentQuestionAdminOut,
@@ -40,6 +41,26 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def _validate_course_publish_payload(payload: dict) -> None:
+    wants_publish = bool(payload.get("is_published"))
+    if not wants_publish:
+        return
+
+    description = (payload.get("description") or "").strip()
+    instructor_name = (payload.get("instructor_name") or "").strip()
+    learning_outcomes = payload.get("learning_outcomes") or []
+
+    if len(description) < 30:
+        raise HTTPException(
+            status_code=400,
+            detail="Published course requires a description with at least 30 characters.",
+        )
+    if not instructor_name:
+        raise HTTPException(status_code=400, detail="Published course requires instructor_name.")
+    if not learning_outcomes:
+        raise HTTPException(status_code=400, detail="Published course requires at least one learning outcome.")
+
+
 # ── Course CRUD (Admin) ───────────────────────────────────────────────────────
 
 @router.get("", response_model=List[CourseListOut])
@@ -64,8 +85,30 @@ async def create_course(
     current_user: User = Depends(require_admin)
 ):
     svc = CourseService(db)
-    course = await svc.create_course(body.model_dump(), creator_id=current_user.id)
+    payload = body.model_dump()
+    _validate_course_publish_payload(payload)
+    course = await svc.create_course(payload, creator_id=current_user.id)
     return course
+
+
+@router.post("/bulk", response_model=List[CourseOut], status_code=201)
+async def create_courses_bulk(
+    body: CourseBulkCreateRequest,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(require_admin),
+):
+    if not body.courses:
+        raise HTTPException(status_code=400, detail="No courses provided")
+
+    svc = CourseService(db)
+    created: List[CourseOut] = []
+    for course_data in body.courses:
+        payload = course_data.model_dump()
+        _validate_course_publish_payload(payload)
+        created_course = await svc.create_course(payload, creator_id=current_user.id)
+        created.append(created_course)
+
+    return created
 
 
 @router.get("/my-enrollments", response_model=List[CourseEnrollmentOut])
@@ -112,7 +155,18 @@ async def update_course(
     course = await svc.get_course(course_id)
     if not course:
         raise HTTPException(404, "Course not found")
-    return await svc.update_course(course, body.model_dump(exclude_none=True))
+
+    patch_data = body.model_dump(exclude_none=True)
+    if patch_data.get("is_published") is True:
+        effective_payload = {
+            "is_published": True,
+            "description": patch_data.get("description", course.description),
+            "instructor_name": patch_data.get("instructor_name", course.instructor_name),
+            "learning_outcomes": patch_data.get("learning_outcomes", course.learning_outcomes),
+        }
+        _validate_course_publish_payload(effective_payload)
+
+    return await svc.update_course(course, patch_data)
 
 
 @router.delete("/{course_id}", status_code=204)

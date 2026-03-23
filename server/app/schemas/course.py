@@ -1,7 +1,7 @@
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ── Module Quiz ─────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ class CourseModuleCreate(BaseModel):
     video_url: Optional[str] = None
     video_duration_seconds: int = 0
     notes_url: Optional[str] = None
-    key_takeaways: List[str] = []
+    key_takeaways: List[str] = Field(default_factory=list)
 
 class CourseModuleUpdate(BaseModel):
     title: Optional[str] = None
@@ -60,7 +60,7 @@ class CourseModuleOut(BaseModel):
     video_duration_seconds: int
     notes_url: Optional[str]
     key_takeaways: List[str]
-    quiz_questions: List[ModuleQuizOut] = []
+    quiz_questions: List[ModuleQuizOut] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -71,18 +71,26 @@ class CourseModuleOut(BaseModel):
 class CourseCreate(BaseModel):
     title: str
     description: Optional[str] = None
+    short_description: Optional[str] = None
+    prerequisites: List[str] = Field(default_factory=list)
+    learning_outcomes: List[str] = Field(default_factory=list)
     instructor_name: str = ""
     duration_hours: float = 1.0
+    estimated_weeks: int = 1
     skill_level: str = "beginner"
-    tags: List[str] = []
+    tags: List[str] = Field(default_factory=list)
     thumbnail_url: Optional[str] = None
     is_published: bool = False
 
 class CourseUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    short_description: Optional[str] = None
+    prerequisites: Optional[List[str]] = None
+    learning_outcomes: Optional[List[str]] = None
     instructor_name: Optional[str] = None
     duration_hours: Optional[float] = None
+    estimated_weeks: Optional[int] = None
     skill_level: Optional[str] = None
     tags: Optional[List[str]] = None
     thumbnail_url: Optional[str] = None
@@ -92,14 +100,18 @@ class CourseOut(BaseModel):
     id: str
     title: str
     description: Optional[str]
+    short_description: Optional[str]
+    prerequisites: List[str] = Field(default_factory=list)
+    learning_outcomes: List[str] = Field(default_factory=list)
     instructor_name: str
     duration_hours: float
+    estimated_weeks: int
     skill_level: str
     tags: List[str]
     thumbnail_url: Optional[str]
     is_published: bool
     created_at: datetime
-    modules: List[CourseModuleOut] = []
+    modules: List[CourseModuleOut] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -108,8 +120,12 @@ class CourseListOut(BaseModel):
     id: str
     title: str
     description: Optional[str]
+    short_description: Optional[str]
+    prerequisites: List[str] = Field(default_factory=list)
+    learning_outcomes: List[str] = Field(default_factory=list)
     instructor_name: str
     duration_hours: float
+    estimated_weeks: int
     skill_level: str
     tags: List[str]
     thumbnail_url: Optional[str]
@@ -172,7 +188,7 @@ class CourseProgressOut(BaseModel):
     progress_pct: float
     avg_quiz_score: Optional[float] = None
     all_done: bool
-    module_progress: List[ModuleProgressOut] = []
+    module_progress: List[ModuleProgressOut] = Field(default_factory=list)
 
 
 # ── Assessment ───────────────────────────────────────────────────────────────
@@ -248,3 +264,7 @@ class AIGenerateQuestionsRequest(BaseModel):
 
 class AIGenerateQuestionsResponse(BaseModel):
     generated_count: int
+
+
+class CourseBulkCreateRequest(BaseModel):
+    courses: List[CourseCreate] = Field(default_factory=list)

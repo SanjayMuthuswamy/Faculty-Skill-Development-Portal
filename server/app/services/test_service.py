@@ -61,10 +61,14 @@ class TestService:
             created_by_id=user_id,
             title=test_in.title,
             description=test_in.description,
+            short_description=test_in.short_description,
+            instructions=test_in.instructions,
+            tags=test_in.tags,
             domain=test_in.domain,
             difficulty=test_in.difficulty,
             pass_marks=test_in.pass_marks,
             time_limit_minutes=test_in.time_limit_minutes,
+            is_published=test_in.is_published,
             total_questions=total_q
         )
         self.db.add(db_test)
@@ -83,7 +87,7 @@ class TestService:
         await self.db.refresh(db_test)
         return db_test
 
-    async def get_all(self, skip: int = 0, limit: int = 100) -> List[Test]:
+    async def get_all(self, skip: int = 0, limit: int = 100, published_only: bool = False) -> List[Test]:
         query = (
             select(Test)
             .offset(skip)
@@ -93,6 +97,9 @@ class TestService:
                 selectinload(Test.question_links).selectinload(TestQuestion.question)
             )
         )
+        if published_only:
+            query = query.where(Test.is_published == True)
+
         result = await self.db.execute(query)
         db_tests = result.scalars().all()
 

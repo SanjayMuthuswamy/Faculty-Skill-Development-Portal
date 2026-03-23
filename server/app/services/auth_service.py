@@ -36,6 +36,19 @@ class AuthService:
             refresh_token=refresh_token,
             token_type="bearer"
         )
+
+    async def reset_password(self, email: str, new_password: str) -> bool:
+        result = await self.db.execute(
+            select(User).where(User.email == email.lower())
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            return False
+
+        user.password_hash = get_password_hash(new_password)
+        await self.db.commit()
+        return True
+
     @staticmethod
     async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
         result = await db.execute(

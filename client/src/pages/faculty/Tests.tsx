@@ -188,7 +188,7 @@ export default function FacultyTests() {
                                         </div>
                                     </div>
                                     <CardTitle className="text-xl leading-tight text-slate-900">{test.title}</CardTitle>
-                                    <CardDescription className="line-clamp-2 min-h-[40px] mt-1 text-slate-500">{test.description}</CardDescription>
+                                    <CardDescription className="line-clamp-2 min-h-[40px] mt-1 text-slate-500">{test.short_description || test.description}</CardDescription>
                                 </CardHeader>
                                 <CardContent className="flex-1 pb-6">
                                     <div className="flex items-center gap-5 text-sm text-slate-500 font-medium">

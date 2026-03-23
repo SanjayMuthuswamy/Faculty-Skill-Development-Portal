@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user, get_session
-from app.schemas.auth import LoginRequest, TokenResponse
+from app.schemas.auth import (
+    LoginRequest,
+    TokenResponse,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
+)
 from app.schemas.user import User
 from app.services.auth_service import AuthService
 
@@ -44,3 +49,22 @@ async def get_current_user_info(
     Requires valid access token.
     """
     return current_user
+
+
+@router.post("/reset-password", response_model=ResetPasswordResponse)
+async def reset_password(
+    payload: ResetPasswordRequest,
+    session: AsyncSession = Depends(get_session),
+) -> ResetPasswordResponse:
+    """
+    Reset password using email and a new password.
+    """
+    auth_service = AuthService(session)
+    updated = await auth_service.reset_password(payload.email, payload.new_password)
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    return ResetPasswordResponse(message="Password reset successful")
