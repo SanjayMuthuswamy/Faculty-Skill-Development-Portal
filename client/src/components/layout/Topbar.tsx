@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bell, LogOut, Menu } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { useSidebar } from '../../app/providers/SidebarProvider';
@@ -61,11 +61,6 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-2 lg:gap-4">
-        <button className="relative p-2 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-blue-600" />
-        </button>
-
         <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-slate-100">
           <div className="h-9 w-9 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center overflow-hidden">
             {avatarUrl ? (

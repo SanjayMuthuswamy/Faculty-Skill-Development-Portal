@@ -307,7 +307,7 @@ export default function FacultyProfile() {
     return (
         <div className="max-w-7xl mx-auto space-y-10 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* ── PROFILE HEADER ────────────────────────────────────────── */}
-            <div className="relative rounded-[40px] overflow-hidden bg-white shadow-2xl shadow-slate-200/50 group">
+            <div className="relative overflow-hidden rounded-[28px] bg-white shadow-2xl shadow-slate-200/50 group sm:rounded-[40px]">
                 {/* Background Cover Gradient */}
                 <div className="h-64 bg-gradient-to-br from-blue-700 via-indigo-600 to-purple-700 relative overflow-hidden">
                     <div className="absolute inset-0 bg-white/10 backdrop-blur-[2px]" />
@@ -317,12 +317,12 @@ export default function FacultyProfile() {
                 </div>
 
                 {/* Profile Info Overlay */}
-                <div className="px-10 pb-10 flex flex-col md:flex-row items-end gap-8 -mt-20 relative z-10">
+                <div className="relative z-10 -mt-20 flex flex-col items-center gap-8 px-4 pb-8 sm:px-8 sm:pb-10 md:flex-row md:items-end lg:px-10">
                     <div className="relative group/avatar">
                         <button
                             type="button"
                             onClick={triggerProfileImageUpload}
-                            className="relative h-44 w-44 rounded-[40px] border-[8px] border-white bg-slate-100 flex items-center justify-center text-5xl font-bold text-blue-600 shadow-xl overflow-hidden shadow-blue-900/10"
+                            className="relative flex h-32 w-32 items-center justify-center overflow-hidden rounded-[28px] border-[6px] border-white bg-slate-100 text-4xl font-bold text-blue-600 shadow-xl shadow-blue-900/10 sm:h-40 sm:w-40 sm:rounded-[36px] sm:border-[8px] sm:text-5xl md:h-44 md:w-44 md:rounded-[40px]"
                             disabled={uploadProfileImageMutation.isPending}
                         >
                             {profileImageUrl ? (
@@ -350,12 +350,12 @@ export default function FacultyProfile() {
                         </div>
                     </div>
 
-                    <div className="flex-1 pb-4">
+                    <div className="flex-1 pb-2 text-center md:pb-4 md:text-left">
                         <div className="flex flex-wrap items-center gap-4 mb-2">
-                            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{user.name}</h1>
+                            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">{user.name}</h1>
                             <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-semibold h-7 rounded-lg">VERIFIED FACULTY</Badge>
                         </div>
-                        <div className="flex flex-wrap items-center gap-6 text-slate-500 font-semibold">
+                        <div className="flex flex-wrap items-center justify-center gap-4 text-slate-500 font-semibold md:justify-start md:gap-6">
                             <span className="flex items-center gap-2"><Briefcase className="h-4 w-4 text-blue-500" /> {profile?.designation || user.designation}</span>
                             <span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-rose-500" /> {profile?.department || 'Faculty Division'}</span>
                             <span className="flex items-center gap-2 font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">
@@ -364,10 +364,10 @@ export default function FacultyProfile() {
                         </div>
                     </div>
 
-                    <div className="flex gap-3 pb-4">
+                    <div className="flex w-full flex-col gap-3 pb-2 sm:flex-row sm:flex-wrap md:w-auto md:pb-4">
                         <Button
                             onClick={triggerProfileImageUpload}
-                            className="rounded-2xl h-14 px-8 font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all"
+                            className="h-12 w-full rounded-2xl bg-slate-900 px-5 font-bold text-white transition-all hover:bg-slate-800 sm:h-14 sm:w-auto sm:px-8"
                             disabled={uploadProfileImageMutation.isPending}
                         >
                             {uploadProfileImageMutation.isPending ? (
@@ -381,13 +381,13 @@ export default function FacultyProfile() {
                         </Button>
                         <Button
                             onClick={handleOpenProfileEdit}
-                            className="rounded-2xl h-14 px-8 font-bold bg-white text-slate-900 border-2 border-slate-100 shadow-xl shadow-slate-200/50 hover:bg-slate-50 transition-all"
+                            className="h-12 w-full rounded-2xl border-2 border-slate-100 bg-white px-5 font-bold text-slate-900 shadow-xl shadow-slate-200/50 transition-all hover:bg-slate-50 sm:h-14 sm:w-auto sm:px-8"
                         >
                             EDIT PROFILE
                         </Button>
                         <Button
                             onClick={handlePublicView}
-                            className="rounded-2xl h-14 px-8 font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-600/30 transition-all"
+                            className="h-12 w-full rounded-2xl bg-blue-600 px-5 font-bold text-white shadow-xl shadow-blue-600/30 transition-all hover:bg-blue-700 sm:h-14 sm:w-auto sm:px-8"
                         >
                             PUBLIC VIEW
                         </Button>
@@ -398,7 +398,7 @@ export default function FacultyProfile() {
             <div className="grid gap-10 md:grid-cols-3">
                 {/* ── SIDEBAR STATS ─────────────────────────────────────── */}
                 <div className="space-y-10">
-                    <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[40px] bg-white p-8">
+                    <Card className="rounded-[28px] border-none bg-white p-5 shadow-2xl shadow-slate-200/50 sm:rounded-[40px] sm:p-8">
                         <CardHeader className="p-0 mb-6">
                             <CardTitle className="text-xl font-bold text-slate-900 flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
@@ -442,8 +442,8 @@ export default function FacultyProfile() {
                 {/* MAIN CONTENT: SKILLS & COURSES */}
                 <div className="md:col-span-2 space-y-10">
                     {/* Skills Matrix */}
-                    <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[40px] bg-white">
-                        <CardHeader className="p-10 pb-0 flex flex-row items-center justify-between">
+                    <Card className="rounded-[28px] border-none bg-white shadow-2xl shadow-slate-200/50 sm:rounded-[40px]">
+                        <CardHeader className="flex flex-row items-center justify-between p-5 pb-0 sm:p-10 sm:pb-0">
                             <div>
                                 <CardTitle className="text-2xl font-bold text-slate-900 tracking-tight">Expertise Matrix</CardTitle>
                                 <CardDescription className="text-slate-400 font-semibold mt-1 uppercase tracking-widest text-[10px]">Your Skills</CardDescription>
@@ -452,8 +452,8 @@ export default function FacultyProfile() {
                                 <Plus className="h-7 w-7" />
                             </Button>
                         </CardHeader>
-                        <CardContent className="p-10 pt-6">
-                            <div className="rounded-3xl border border-slate-100 overflow-hidden shadow-sm bg-slate-50/50">
+                        <CardContent className="p-5 pt-6 sm:p-10 sm:pt-6">
+                            <div className="overflow-x-auto rounded-3xl border border-slate-100 bg-slate-50/50 shadow-sm">
                                 <Table>
                                     <TableHeader className="bg-white">
                                         <TableRow className="hover:bg-transparent border-slate-100">
@@ -493,9 +493,9 @@ export default function FacultyProfile() {
                     </Card>
 
                     {/* Official Test Completions */}
-                    <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[40px] bg-white overflow-hidden">
+                    <Card className="overflow-hidden rounded-[28px] border-none bg-white shadow-2xl shadow-slate-200/50 sm:rounded-[40px]">
                         <div className="h-2 w-full bg-gradient-to-r from-blue-500 to-indigo-500" />
-                        <CardHeader className="p-10 pb-0">
+                        <CardHeader className="p-5 pb-0 sm:p-10 sm:pb-0">
                             <CardTitle className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
                                 <CheckCircle2 className="h-7 w-7 text-blue-600" /> Official Test Completions
                             </CardTitle>
@@ -503,7 +503,7 @@ export default function FacultyProfile() {
                                 {completedOfficialTests.length} Tests Cleared
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-10">
+                        <CardContent className="p-5 sm:p-10">
                             {completedOfficialTests.length === 0 ? (
                                 <div className="text-center py-12 px-6 rounded-3xl border-2 border-dashed border-slate-100">
                                     <p className="text-slate-400 font-semibold uppercase tracking-widest text-[11px]">No official tests passed yet</p>
@@ -514,14 +514,14 @@ export default function FacultyProfile() {
                                     {completedOfficialTests.map(attempt => {
                                         const test = testsQuery.data?.find(t => t.id === attempt.test_id);
                                         return (
-                                            <div key={attempt.id} className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 flex items-center justify-between gap-4">
+                                            <div key={attempt.id} className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/50 p-5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                                                 <div className="min-w-0">
                                                     <p className="font-bold text-slate-900 truncate">{test?.title || attempt.test_title || 'Official Test'}</p>
                                                     <p className="text-[11px] text-slate-500 font-semibold mt-1">
                                                         Passed {format(new Date(attempt.submitted_at || attempt.started_at), 'MMM d, yyyy')}
                                                     </p>
                                                 </div>
-                                                <div className="flex items-center gap-4 shrink-0">
+                                                <div className="flex items-center justify-between gap-4 sm:shrink-0">
                                                     <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 font-bold h-7">
                                                         {Math.round(attempt.accuracy || 0)}%
                                                     </Badge>
@@ -543,9 +543,9 @@ export default function FacultyProfile() {
                     </Card>
 
                     {/* Raise Feedback */}
-                    <Card className="border-none shadow-2xl shadow-indigo-200/30 rounded-[40px] bg-gradient-to-br from-indigo-700 to-indigo-900 text-white p-10 relative overflow-hidden">
+                    <Card className="relative overflow-hidden rounded-[28px] border-none bg-gradient-to-br from-indigo-700 to-indigo-900 p-5 text-white shadow-2xl shadow-indigo-200/30 sm:rounded-[40px] sm:p-10">
                         <div className="absolute top-0 right-0 p-10 opacity-10 blur-sm pointer-events-none">
-                            <MessageSquarePlus className="h-64 w-64 text-white" />
+                            <MessageSquarePlus className="h-40 w-40 text-white sm:h-64 sm:w-64" />
                         </div>
                         <div className="relative z-10 grid md:grid-cols-2 gap-10 items-center">
                             <div>

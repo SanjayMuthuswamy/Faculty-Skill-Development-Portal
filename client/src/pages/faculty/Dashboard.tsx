@@ -183,8 +183,8 @@ export default function FacultyDashboard() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="col-span-4">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <Card className="lg:col-span-4">
+                    <CardHeader className="flex flex-col items-start justify-between gap-3 space-y-0 sm:flex-row sm:items-center">
                         <CardTitle>Recent Performance</CardTitle>
                         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
                             <button
@@ -225,7 +225,7 @@ export default function FacultyDashboard() {
                     </CardContent>
                 </Card>
 
-                <Card className="col-span-3">
+                <Card className="lg:col-span-3">
                     <CardHeader>
                         <CardTitle>Recommended Programs</CardTitle>
                     </CardHeader>

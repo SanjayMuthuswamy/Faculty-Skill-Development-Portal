@@ -12,7 +12,6 @@ import { Pagination } from '../../components/ui/Pagination';
 import { useDebouncedValue } from '../../lib/hooks/useDebouncedValue';
 import {
     Users,
-    TrendingUp,
     AlertTriangle,
     ExternalLink,
     Search,
@@ -90,11 +89,10 @@ export function FacultyList() {
     });
 
     const metrics = useMemo(() => {
-        if (!departmentSummary) return { progress: 0, verified: 0, attention: 0 };
-        const avgProgress = Math.round(departmentSummary.reduce((acc, d) => acc + d.plan_adoption_rate, 0) / (departmentSummary.length || 1));
+        if (!departmentSummary) return { verified: 0, attention: 0 };
         const totalVerified = Math.round(departmentSummary.reduce((acc, d) => acc + (d.verified_skills_rate * d.faculty_count / 100), 0));
         const attentionNeeded = departmentSummary.filter(d => d.avg_accuracy < 60).length;
-        return { progress: avgProgress, verified: totalVerified, attention: attentionNeeded };
+        return { verified: totalVerified, attention: attentionNeeded };
     }, [departmentSummary]);
 
     const facultyList = facultyListData?.items ?? [];
@@ -133,10 +131,10 @@ export function FacultyList() {
                             }}
                         />
                     </div>
-                    <div className="relative">
+                    <div className="relative w-full sm:w-auto">
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <select
-                            className="pl-10 pr-8 py-2 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm appearance-none min-w-[140px]"
+                            className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2 pl-10 pr-8 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 sm:w-auto sm:min-w-[140px]"
                             value={deptFilter}
                             onChange={(e) => {
                                 setDeptFilter(e.target.value);
@@ -165,17 +163,6 @@ export function FacultyList() {
                     </CardContent>
                 </Card>
                 <Card className="border-none shadow-sm bg-white overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-xs font-bold uppercase text-gray-400">Avg Progress</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-purple-500 group-hover:scale-110 transition-transform" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{metrics.progress}%</div>
-                        <p className="text-[10px] text-gray-500 mt-1">Global roadmap completion</p>
-                    </CardContent>
-                </Card>
-                <Card className="border-none shadow-sm bg-white overflow-hidden group">
                     <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-xs font-bold uppercase text-gray-400">Verified Skills</CardTitle>
@@ -201,33 +188,35 @@ export function FacultyList() {
 
             <Card className="border-none shadow-xl bg-white overflow-hidden">
                 <CardContent className="p-0">
-                    <Table>
-                        <TableHeader className="bg-slate-50/80">
-                            <TableRow>
-                                <TableHead className="pl-6 py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Faculty Details</TableHead>
-                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Enrollments</TableHead>
-                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Active Plan</TableHead>
-                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Accuracy</TableHead>
-                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Attempts</TableHead>
-                                <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">AI Recommendation</TableHead>
-                                <TableHead className="text-right pr-6 py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Action</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {facultyList.map((faculty) => (
-                                <FacultyRow key={faculty.id} faculty={faculty} onView={() => navigate(`/admin/faculty/${faculty.id}`)} />
-                            ))}
-                            {facultyList.length === 0 && (
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader className="bg-slate-50/80">
                                 <TableRow>
-                                    <TableCell colSpan={8} className="h-32 text-center text-gray-500 font-bold italic">
-                                        {listError
-                                            ? 'Failed to load faculty list from server. Please refresh or re-login.'
-                                            : 'No faculty members found matching your criteria.'}
-                                    </TableCell>
+                                    <TableHead className="pl-6 py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Faculty Details</TableHead>
+                                    <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Enrollments</TableHead>
+                                    <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Active Plan</TableHead>
+                                    <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Accuracy</TableHead>
+                                    <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Attempts</TableHead>
+                                    <TableHead className="py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">AI Recommendation</TableHead>
+                                    <TableHead className="text-right pr-6 py-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Action</TableHead>
                                 </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {facultyList.map((faculty) => (
+                                    <FacultyRow key={faculty.id} faculty={faculty} onView={() => navigate(`/admin/faculty/${faculty.id}`)} />
+                                ))}
+                                {facultyList.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="h-32 text-center text-gray-500 font-bold italic">
+                                            {listError
+                                                ? 'Failed to load faculty list from server. Please refresh or re-login.'
+                                                : 'No faculty members found matching your criteria.'}
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
             {totalPages > 1 && (
@@ -273,7 +262,7 @@ export function FacultyList() {
                                 onChange={e => setNewFaculty({ ...newFaculty, email: e.target.value })}
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
                                 <select
@@ -401,7 +390,7 @@ function FacultyRow({ faculty, onView }: { faculty: any, onView: () => void }) {
             </TableCell>
             <TableCell className="py-5">
                 {summary ? (
-                    <div className="flex flex-col gap-1.5 min-w-[140px] px-2 text-center">
+                    <div className="flex w-full flex-col gap-1.5 px-2 text-center sm:min-w-[140px]">
                         <span className="text-blue-600 font-black text-[10px]">{Math.round(summary.active_plan_progress)}%</span>
                         <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
                             <div
