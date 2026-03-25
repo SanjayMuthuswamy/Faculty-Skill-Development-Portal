@@ -1,37 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import { analyticsApi } from '../../lib/api/analytics';
-import { facultyApi } from '../../lib/api/faculty';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import {
     Users,
     TrendingUp,
     BrainCircuit,
-    Search,
     ShieldCheck,
-    ChevronRight,
     BookOpen,
     BarChart3,
-    PieChart as PieIcon,
-    Activity
+    PieChart as PieIcon
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
 
 export default function AdminDashboard() {
-    const [searchQuery, setSearchQuery] = useState('');
-    const navigate = useNavigate();
-
     const { data: departmentStats, isLoading: isLoadingDept } = useQuery({
         queryKey: ['admin-dept-summary'],
         queryFn: analyticsApi.getDepartmentSummary,
-    });
-
-    const { data: facultyProfiles, isLoading: isLoadingFaculty } = useQuery({
-        queryKey: ['admin-faculty-list'],
-        queryFn: () => facultyApi.listProfiles(),
     });
 
     // Aggregated Metrics
@@ -62,14 +48,6 @@ export default function AdminDashboard() {
         };
     }, [departmentStats]);
 
-    const filteredFaculty = useMemo(() => {
-        if (!facultyProfiles) return [];
-        return facultyProfiles.filter(f =>
-            (f.user?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (f.department || '').toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [facultyProfiles, searchQuery]);
-
     const chartData = useMemo(() => {
         if (!departmentStats) return [];
         return departmentStats.map(d => ({
@@ -94,14 +72,14 @@ export default function AdminDashboard() {
         ];
     }, [departmentStats]);
 
-    if (isLoadingDept || isLoadingFaculty) {
+    if (isLoadingDept) {
         return <div className="p-8 text-center text-gray-400">Loading dashboard data...</div>;
     }
 
     return (
         <div className="space-y-8 pb-12">
             <div>
-                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 mb-2">
+                <h1 className="mb-2 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
                     Executive <span className="text-blue-600">Analytics</span>
                 </h1>
                 <p className="text-slate-500 font-medium text-lg">Monitor institutional skill growth and career readiness across departments</p>
@@ -222,76 +200,6 @@ export default function AdminDashboard() {
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Faculty Risk Tracking */}
-                    <Card className="border-none shadow-xl bg-white overflow-hidden">
-                        <CardHeader className="flex flex-row items-center justify-between border-b border-gray-50 p-6">
-                            <div className="flex items-center gap-2">
-                                <Activity className="h-5 w-5 text-rose-500" />
-                                <div>
-                                    <CardTitle className="text-lg font-black">AI-Driven Risk Matrix</CardTitle>
-                                    <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Faculty identified by engagement patterns</CardDescription>
-                                </div>
-                            </div>
-                            <div className="relative group">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
-                                <input
-                                    className="pl-9 h-10 w-64 rounded-xl border border-gray-100 bg-gray-50/50 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:bg-white transition-all"
-                                    placeholder="Search by name or department..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                />
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="border-t">
-                                {isLoadingFaculty ? (
-                                    <div className="p-8 text-center text-gray-400">Loading risk data...</div>
-                                ) : filteredFaculty?.length === 0 ? (
-                                    <div className="p-8 text-center text-gray-400">No faculty found</div>
-                                ) : filteredFaculty?.map((f) => {
-                                    return (
-                                        <div key={f.id} className="flex items-center px-6 py-4 border-b last:border-0 hover:bg-gray-50/80 transition-colors group">
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-600 font-black text-xs shadow-sm group-hover:from-blue-500 group-hover:to-indigo-600 group-hover:text-white transition-all">
-                                                        {f.user?.name?.charAt(0) || 'F'}
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{f.user?.name || 'Unknown'}</span>
-                                                            <Badge className="bg-slate-100 text-slate-500 border-none text-[8px] uppercase font-black tracking-tight">{f.department}</Badge>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-3 mt-1 text-[9px] font-bold text-slate-400">
-                                                            <span className="uppercase tracking-widest">{f.designation || 'Faculty'}</span>
-                                                            <span className="w-1 h-1 rounded-full bg-slate-300 self-center" />
-                                                            <span className="uppercase tracking-widest">{f.experience_years} Years Exp</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col items-end gap-3 ml-4">
-                                                <div className="text-right">
-                                                    <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Status</div>
-                                                    <Badge className="bg-emerald-50 text-emerald-600 border-none text-[9px] font-black uppercase tracking-tight h-5">
-                                                        Active
-                                                    </Badge>
-                                                </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-8 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg group/btn"
-                                                    onClick={() => navigate(`/admin/faculty/${f.id}`)}
-                                                >
-                                                    Review <ChevronRight className="ml-1 h-3.5 w-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
                             </div>
                         </CardContent>
                     </Card>

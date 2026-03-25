@@ -16,12 +16,10 @@ export default function AdminTestBuilder() {
     const { addToast } = useToast();
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
     const [editingTest, setEditingTest] = useState<Test | null>(null);
     const [selectedPackIds, setSelectedPackIds] = useState<string[]>([]);
     const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
     const [expandedPacks, setExpandedPacks] = useState<string[]>([]);
-    const [bulkTitles, setBulkTitles] = useState('');
 
     const { data: tests, isLoading: isLoadingTests } = useQuery({
         queryKey: ['tests'],
@@ -33,7 +31,7 @@ export default function AdminTestBuilder() {
         queryFn: () => questionPacksApi.listPacks(),
     });
 
-    const { register, handleSubmit, reset, setValue, control, getValues } = useForm<any>({
+    const { register, handleSubmit, reset, setValue, control } = useForm<any>({
         defaultValues: {
             domain: SkillDomain.TECHNOLOGY,
             difficulty: Difficulty.INTERMEDIATE,
@@ -94,18 +92,6 @@ export default function AdminTestBuilder() {
         },
     });
 
-    const createBulkMutation = useMutation({
-        mutationFn: (tests: any[]) => testsApi.createTestsBulk(tests),
-        onSuccess: (created) => {
-            addToast(`${created.length} tests created successfully`, 'success');
-            queryClient.invalidateQueries({ queryKey: ['tests'] });
-            setIsBulkModalOpen(false);
-            setBulkTitles('');
-            setSelectedPackIds([]);
-            setSelectedQuestionIds([]);
-        },
-    });
-
     const onSubmit = (data: any) => {
         if (!editingTest && totalQuestionsSelected === 0) {
             addToast('Please select at least one pack or question', 'error');
@@ -154,50 +140,6 @@ export default function AdminTestBuilder() {
         } catch {
             addToast('Unable to load full test details for editing', 'error');
         }
-    };
-
-    const handleBulkCreate = () => {
-        const titles = bulkTitles
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean);
-
-        if (!titles.length) {
-            addToast('Please add at least one test title', 'error');
-            return;
-        }
-        if (totalQuestionsSelected === 0) {
-            addToast('Please select packs/questions before bulk create', 'error');
-            return;
-        }
-
-        const values = getValues();
-        const domain = (values.domain || SkillDomain.TECHNOLOGY) as SkillDomain;
-        const difficulty = (values.difficulty || Difficulty.INTERMEDIATE) as Difficulty;
-        const time_limit_minutes = Number(values.durationMinutes || 30);
-        const pass_marks = Number(values.passScore || 70);
-        const description = values.description || '';
-        const short_description = values.short_description || '';
-        const instructions = values.instructions || '';
-        const tags = (values.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
-        const is_published = !!values.is_published;
-
-        const payload = titles.map((title) => ({
-            title,
-            description: description || `Assessment test for ${title}`,
-            short_description: short_description || title,
-            instructions,
-            tags,
-            domain,
-            difficulty,
-            time_limit_minutes,
-            pass_marks,
-            is_published,
-            pack_ids: selectedPackIds,
-            question_ids: selectedQuestionIds,
-        }));
-
-        createBulkMutation.mutate(payload);
     };
 
     const handleCreate = () => {
@@ -260,9 +202,6 @@ export default function AdminTestBuilder() {
                 </div>
                 <Button onClick={handleCreate}>
                     <Plus className="mr-2 h-4 w-4" /> Create Test
-                </Button>
-                <Button variant="outline" onClick={() => setIsBulkModalOpen(true)}>
-                    Bulk Create
                 </Button>
             </div>
 
@@ -419,26 +358,6 @@ export default function AdminTestBuilder() {
                         <Button type="submit">{editingTest ? "Update Test" : "Create Test"}</Button>
                     </div>
                 </form>
-            </Modal>
-
-            <Modal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} title="Bulk Create Tests">
-                <div className="space-y-4">
-                    <p className="text-sm text-gray-600">
-                        Add one test title per line. Selected content and settings from the main form are reused.
-                    </p>
-                    <textarea
-                        className="w-full min-h-[220px] rounded-md border border-gray-300 px-3 py-2 text-sm"
-                        value={bulkTitles}
-                        onChange={(e) => setBulkTitles(e.target.value)}
-                        placeholder={"Teaching Fundamentals Test\nAI in Research Test\nCommunication Skills Test"}
-                    />
-                    <div className="flex justify-end gap-3">
-                        <Button variant="ghost" onClick={() => setIsBulkModalOpen(false)}>Cancel</Button>
-                        <Button onClick={handleBulkCreate} isLoading={createBulkMutation.isPending}>
-                            Create Tests
-                        </Button>
-                    </div>
-                </div>
             </Modal>
         </div>
     );
