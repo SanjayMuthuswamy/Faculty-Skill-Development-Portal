@@ -36,7 +36,9 @@ export default function AdminTestBuilder() {
             domain: SkillDomain.TECHNOLOGY,
             difficulty: Difficulty.INTERMEDIATE,
             durationMinutes: 30,
-            passScore: 70
+            passScore: 70,
+            is_published: false,
+            tags: '',
         }
     });
 
@@ -99,10 +101,14 @@ export default function AdminTestBuilder() {
         const formattedData = {
             title: data.title,
             description: data.description,
+            short_description: data.short_description,
+            instructions: data.instructions,
+            tags: (data.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean),
             domain: data.domain,
             difficulty: data.difficulty,
             time_limit_minutes: Number(data.durationMinutes),
             pass_marks: Number(data.passScore),
+            is_published: !!data.is_published,
             pack_ids: selectedPackIds,
             question_ids: selectedQuestionIds,
         };
@@ -120,10 +126,14 @@ export default function AdminTestBuilder() {
             setEditingTest(detailedTest);
             setValue('title', detailedTest.title);
             setValue('description', detailedTest.description || '');
+            setValue('short_description', detailedTest.short_description || '');
+            setValue('instructions', detailedTest.instructions || '');
+            setValue('tags', (detailedTest.tags || []).join(', '));
             setValue('domain', detailedTest.domain);
             setValue('durationMinutes', detailedTest.time_limit_minutes);
             setValue('passScore', detailedTest.pass_marks);
             setValue('difficulty', detailedTest.difficulty);
+            setValue('is_published', !!detailedTest.is_published);
             setSelectedPackIds(detailedTest.pack_ids || []);
             setSelectedQuestionIds(detailedTest.question_ids || []);
             setIsModalOpen(true);
@@ -203,6 +213,9 @@ export default function AdminTestBuilder() {
                         <CardHeader>
                             <div className="flex justify-between items-start">
                                 <Badge variant="outline">{test.domain}</Badge>
+                                <Badge variant={test.is_published ? 'success' : 'secondary'}>
+                                    {test.is_published ? 'Published' : 'Draft'}
+                                </Badge>
                                 <Badge variant={
                                     test.difficulty === Difficulty.BEGINNER ? 'success' :
                                         test.difficulty === Difficulty.INTERMEDIATE ? 'warning' :
@@ -239,6 +252,14 @@ export default function AdminTestBuilder() {
                             {...register('description')}
                         />
                     </div>
+
+                    <Input label="Short Description" {...register('short_description')} />
+                    <Input label="Instructions" {...register('instructions')} />
+                    <Input label="Tags (comma-separated)" {...register('tags')} />
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" {...register('is_published')} />
+                        Publish this test
+                    </label>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">

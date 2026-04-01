@@ -2,6 +2,8 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import uuid4
+import re
+import random
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -16,6 +18,23 @@ class PracticeSetService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.llm = LLMService()
+
+    @staticmethod
+    def _normalize_question_text(text: str) -> str:
+        return re.sub(r"\s+", " ", (text or "").strip().lower())
+
+    async def _get_seen_question_texts(self, faculty_id: str) -> set[str]:
+        """Return normalized question text already shown to this faculty."""
+        result = await self.db.execute(
+            select(PracticeSetQuestion.question_text)
+            .join(PracticeSet, PracticeSetQuestion.set_id == PracticeSet.id)
+            .where(PracticeSet.faculty_id == faculty_id)
+        )
+        return {
+            self._normalize_question_text(question_text)
+            for question_text in result.scalars().all()
+            if question_text
+        }
 
     async def generate_set(self, faculty_id: str, set_in: PracticeSetCreate) -> PracticeSet:
         # 1. Create the PracticeSet record
@@ -32,17 +51,25 @@ class PracticeSetService:
         # 2. Get questions based on source
         questions_to_add = []
         
+        seen_texts = await self._get_seen_question_texts(faculty_id)
+        chosen_texts: set[str] = set()
+
         if set_in.source == "PACK" or set_in.source == "WEAKNESS":
             # Fetch from existing question packs
             query = select(Question).join(QuestionPack).where(
                 QuestionPack.domain == set_in.domain
             )
             # Add difficulty filter if needed in future
-            
-            result = await self.db.execute(query.limit(set_in.count))
+
+            # Pull a larger pool and de-duplicate against previous sets.
+            result = await self.db.execute(query.limit(max(set_in.count * 6, 20)))
             source_questions = result.scalars().all()
-            
+            random.shuffle(source_questions)
+
             for q in source_questions:
+                normalized = self._normalize_question_text(q.question_text)
+                if normalized in chosen_texts or normalized in seen_texts:
+                    continue
                 questions_to_add.append(PracticeSetQuestion(
                     id=str(uuid4()),
                     set_id=db_set.id,
@@ -54,6 +81,9 @@ class PracticeSetService:
                     correct_option=q.correct_option,
                     explanation=q.explanation
                 ))
+                chosen_texts.add(normalized)
+                if len(questions_to_add) >= set_in.count:
+                    break
 
             if not questions_to_add:
                 raise ValueError(
@@ -71,6 +101,9 @@ class PracticeSetService:
 
             if ai_response and ai_response.questions:
                 for q_ai in ai_response.questions:
+                    normalized = self._normalize_question_text(q_ai.question_text)
+                    if normalized in chosen_texts or normalized in seen_texts:
+                        continue
                     questions_to_add.append(PracticeSetQuestion(
                         id=str(uuid4()),
                         set_id=db_set.id,
@@ -82,6 +115,38 @@ class PracticeSetService:
                         correct_option=q_ai.correct_option,
                         explanation=q_ai.explanation
                     ))
+                    chosen_texts.add(normalized)
+
+                # If duplicates reduced the set, request additional variants.
+                refill_attempt = 1
+                while len(questions_to_add) < set_in.count and refill_attempt <= 2:
+                    refill_count = set_in.count - len(questions_to_add)
+                    extra = await self.llm.generate_practice_questions(
+                        topic=f"{topic} variation set {refill_attempt}",
+                        difficulty=set_in.difficulty,
+                        count=refill_count,
+                    )
+                    if not extra or not extra.questions:
+                        break
+                    for q_ai in extra.questions:
+                        normalized = self._normalize_question_text(q_ai.question_text)
+                        if normalized in chosen_texts or normalized in seen_texts:
+                            continue
+                        questions_to_add.append(PracticeSetQuestion(
+                            id=str(uuid4()),
+                            set_id=db_set.id,
+                            question_text=q_ai.question_text,
+                            option_a=q_ai.option_a,
+                            option_b=q_ai.option_b,
+                            option_c=q_ai.option_c,
+                            option_d=q_ai.option_d,
+                            correct_option=q_ai.correct_option,
+                            explanation=q_ai.explanation
+                        ))
+                        chosen_texts.add(normalized)
+                        if len(questions_to_add) >= set_in.count:
+                            break
+                    refill_attempt += 1
             else:
                 raise RuntimeError(
                     "Unable to generate custom practice questions right now. "

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../app/providers/AuthProvider';
+import { authApi } from '../lib/api/auth';
 import { Button } from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
 import { Eye, EyeOff, KeyRound, Mail, GraduationCap, ShieldCheck, LineChart } from 'lucide-react';
@@ -13,13 +14,25 @@ const loginSchema = z.object({
     password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
+const resetSchema = z.object({
+    email: z.string().email('Invalid email address'),
+    newPassword: z.string().min(6, 'Password must be at least 6 characters'),
+    confirmPassword: z.string().min(6, 'Password must be at least 6 characters'),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match',
+});
+
 type LoginFormValues = z.infer<typeof loginSchema>;
+type ResetFormValues = z.infer<typeof resetSchema>;
 
 export default function Login() {
     const { login } = useAuth();
     const { addToast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
+    const [isResetLoading, setIsResetLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [showResetForm, setShowResetForm] = useState(false);
 
     const {
         register,
@@ -28,6 +41,16 @@ export default function Login() {
     } = useForm<LoginFormValues>({
         resolver: zodResolver(loginSchema),
         defaultValues: { email: '', password: '' },
+    });
+
+    const {
+        register: registerReset,
+        handleSubmit: handleResetSubmit,
+        reset: resetResetForm,
+        formState: { errors: resetErrors },
+    } = useForm<ResetFormValues>({
+        resolver: zodResolver(resetSchema),
+        defaultValues: { email: '', newPassword: '', confirmPassword: '' },
     });
 
     const onSubmit = async (data: LoginFormValues) => {
@@ -39,6 +62,20 @@ export default function Login() {
             addToast('Invalid email or password. Please try again.', 'error');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const onResetSubmit = async (data: ResetFormValues) => {
+        setIsResetLoading(true);
+        try {
+            await authApi.resetPassword(data.email, data.newPassword);
+            addToast('Password reset successful. You can login now.', 'success');
+            setShowResetForm(false);
+            resetResetForm();
+        } catch {
+            addToast('Unable to reset password for this email.', 'error');
+        } finally {
+            setIsResetLoading(false);
         }
     };
 
@@ -143,6 +180,46 @@ export default function Login() {
                                     Enter Portal
                                 </Button>
                             </form>
+
+                            <div className="mt-4 text-right">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowResetForm((prev) => !prev)}
+                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                                >
+                                    {showResetForm ? 'Hide reset password' : 'Forgot password? Reset here'}
+                                </button>
+                            </div>
+
+                            {showResetForm && (
+                                <form onSubmit={handleResetSubmit(onResetSubmit)} className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reset Password</p>
+                                    <input
+                                        {...registerReset('email')}
+                                        type="email"
+                                        placeholder="Your email"
+                                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                    />
+                                    {resetErrors.email && <p className="text-xs text-rose-500">{resetErrors.email.message}</p>}
+                                    <input
+                                        {...registerReset('newPassword')}
+                                        type="password"
+                                        placeholder="New password"
+                                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                    />
+                                    {resetErrors.newPassword && <p className="text-xs text-rose-500">{resetErrors.newPassword.message}</p>}
+                                    <input
+                                        {...registerReset('confirmPassword')}
+                                        type="password"
+                                        placeholder="Confirm new password"
+                                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                                    />
+                                    {resetErrors.confirmPassword && <p className="text-xs text-rose-500">{resetErrors.confirmPassword.message}</p>}
+                                    <Button type="submit" isLoading={isResetLoading} className="h-10 w-full">
+                                        Reset Password
+                                    </Button>
+                                </form>
+                            )}
 
                             <p className="mt-8 text-center text-xs text-slate-500">
                                 Secure academic workspace. Authorized users only.

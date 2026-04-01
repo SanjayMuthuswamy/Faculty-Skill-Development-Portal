@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
+import { useToast } from '../../components/ui/Toast';
 import { useNavigate } from 'react-router-dom';
 import {
     ArrowRight,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
+import { getApiErrorMessage } from '../../lib/api/error';
 // Pagination removed here
 
 type TabType = 'sandbox' | 'attempts';
@@ -25,14 +27,15 @@ export default function Practice() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const { addToast } = useToast();
     const [activeTab, setActiveTab] = useState<TabType>('sandbox');
 
     // AI Sandbox Form State
     const [sandboxDomain, setSandboxDomain] = useState<SkillDomain>(SkillDomain.AI);
     const [sandboxDifficulty, setSandboxDifficulty] = useState<'EASY' | 'MEDIUM' | 'HARD'>('MEDIUM');
-    const [sandboxCount, setSandboxCount] = useState<number>(10);
-    const [sandboxSource, setSandboxSource] = useState<'WEAKNESS' | 'CUSTOM' | 'PACK'>('PACK');
-    const [sandboxTopic, setSandboxTopic] = useState<string>('');
+    const [sandboxCount, setSandboxCount] = useState<number>(5);
+    const [sandboxSource, setSandboxSource] = useState<'WEAKNESS' | 'CUSTOM' | 'PACK'>('CUSTOM');
+    const [sandboxTopic, setSandboxTopic] = useState<string>('Artificial Intelligence fundamentals');
 
     // Pagination State (removed as unused, or kept if AI sets get paginated later)
     // Removed unused historyPage and ITEMS_PER_PAGE for now as AI tests are not currently paginated.
@@ -50,19 +53,26 @@ export default function Practice() {
         onSuccess: (newSet) => {
             queryClient.invalidateQueries({ queryKey: ['ai-practice-sets'] });
             navigate(`/faculty/practice/play/${newSet.id}`);
-        }
+        },
+        onError: (error) => {
+            addToast(getApiErrorMessage(error, 'Failed to generate practice set'), 'error');
+        },
     });
 
     // Removed getTestTitle and filteredTests
 
     const handleGenerate = () => {
         if (!user) return;
+        if (sandboxSource === 'CUSTOM' && !sandboxTopic.trim()) {
+            addToast('Please enter a topic for custom AI practice.', 'warning');
+            return;
+        }
         generateMutation.mutate({
             domain: sandboxDomain,
             difficulty: sandboxDifficulty,
             count: sandboxCount,
             source: sandboxSource,
-            topic: sandboxTopic
+            topic: sandboxSource === 'CUSTOM' ? sandboxTopic.trim() : undefined
         });
     };
 

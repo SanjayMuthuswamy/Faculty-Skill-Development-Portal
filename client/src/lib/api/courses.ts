@@ -28,8 +28,12 @@ export interface Course {
     id: string;
     title: string;
     description?: string;
+    short_description?: string;
+    prerequisites: string[];
+    learning_outcomes: string[];
     instructor_name: string;
     duration_hours: number;
+    estimated_weeks: number;
     skill_level: 'beginner' | 'intermediate' | 'advanced';
     tags: string[];
     thumbnail_url?: string;
@@ -127,6 +131,9 @@ export const coursesApi = {
 
     createCourse: (data: Partial<Course>): Promise<Course> =>
         http.post('/api/v1/courses', data).then(r => r.data),
+
+    createCoursesBulk: (courses: Partial<Course>[]): Promise<Course[]> =>
+        http.post('/api/v1/courses/bulk', { courses }).then(r => r.data),
 
     updateCourse: (id: string, data: Partial<Course>): Promise<Course> =>
         http.put(`/api/v1/courses/${id}`, data).then(r => r.data),

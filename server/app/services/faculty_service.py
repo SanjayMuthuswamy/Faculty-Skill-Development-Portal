@@ -1,7 +1,9 @@
 
+from pathlib import Path
 from typing import Optional, List
 from uuid import uuid4
 
+from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, attributes
@@ -22,6 +24,17 @@ from app.schemas.skill import FacultySkillCreate, FacultySkillUpdate
 from app.schemas.news import NewsPreferencesUpdate
 
 from app.services.llm_service import LLMService
+
+
+MAX_PROFILE_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
+ALLOWED_PROFILE_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+PROFILE_IMAGE_UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads" / "profile-images"
+
 
 class FacultyService:
     def __init__(self, db: AsyncSession):
@@ -111,10 +124,10 @@ class FacultyService:
         
         await self.db.flush() # Ensure IDs are set
         
-        # 4. Initialize News Preferences
+        # 4. Initialize News Preferences as blank for new users.
         prefs = FacultyNewsPreferences(
             faculty_id=db_profile.id,
-            topics=["AI", "Cloud Computing"]
+            topics=[]
         )
         self.db.add(prefs)
         
@@ -134,6 +147,40 @@ class FacultyService:
             
         await self.db.commit()
         # Re-fetch with relationships to keep user and skills populated
+        return await self.get_by_user_id(user_id)
+
+    async def upload_profile_image(self, user_id: str, file: UploadFile) -> Optional[FacultyProfile]:
+        profile = await self.get_by_user_id(user_id)
+        if not profile:
+            return None
+
+        content_type = (file.content_type or "").lower().strip()
+        extension = ALLOWED_PROFILE_IMAGE_TYPES.get(content_type)
+        if not extension:
+            raise ValueError("Unsupported image type. Use JPG, PNG, WEBP, or GIF.")
+
+        content = await file.read(MAX_PROFILE_IMAGE_SIZE_BYTES + 1)
+        if not content:
+            raise ValueError("Empty image file.")
+        if len(content) > MAX_PROFILE_IMAGE_SIZE_BYTES:
+            raise ValueError("Image too large. Maximum size is 5 MB.")
+
+        PROFILE_IMAGE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+        new_filename = f"{profile.id}-{uuid4().hex}{extension}"
+        new_relative_path = f"/uploads/profile-images/{new_filename}"
+        new_file_path = PROFILE_IMAGE_UPLOAD_DIR / new_filename
+        new_file_path.write_bytes(content)
+
+        # Remove previous image from disk if it belongs to our uploads folder.
+        if profile.profile_image_url and profile.profile_image_url.startswith("/uploads/profile-images/"):
+            old_file_name = profile.profile_image_url.rsplit("/", 1)[-1]
+            old_file_path = PROFILE_IMAGE_UPLOAD_DIR / old_file_name
+            if old_file_path.exists():
+                old_file_path.unlink(missing_ok=True)
+
+        profile.profile_image_url = new_relative_path
+        await self.db.commit()
         return await self.get_by_user_id(user_id)
     
     async def add_skill(self, faculty_id: str, skill_in: FacultySkillCreate) -> FacultySkill:
@@ -240,7 +287,7 @@ class FacultyService:
         if not prefs:
             prefs = FacultyNewsPreferences(
                 faculty_id=faculty_id,
-                topics=["AI", "Cloud Computing"] # Default topics
+                topics=[]
             )
             self.db.add(prefs)
             await self.db.commit()

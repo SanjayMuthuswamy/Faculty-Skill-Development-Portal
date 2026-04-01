@@ -4,6 +4,7 @@ import { coursesApi, Course, CourseModule, ModuleQuiz, AdminAssessmentQuestion }
 import { Plus, Trash2, ChevronDown, ChevronRight, Edit2, Eye, EyeOff, Loader2, X, Save } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useToast } from '../../components/ui/Toast';
+import { getApiErrorMessage } from '../../lib/api/error';
 
 type ModalMode = 'course' | 'module' | 'quiz' | 'assessment' | null;
 
@@ -48,6 +49,8 @@ export default function CourseManagerPage() {
     const [modal, setModal] = useState<ModalState>({ mode: null });
     const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
     const [form, setForm] = useState<Record<string, any>>({});
+    const [showBulkCourseModal, setShowBulkCourseModal] = useState(false);
+    const [bulkCourseTitles, setBulkCourseTitles] = useState('');
 
     const { data: courses = [], isLoading } = useQuery({
         queryKey: ['admin-courses'],
@@ -70,6 +73,17 @@ export default function CourseManagerPage() {
             queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
             queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
             setModal({ mode: null });
+        },
+    });
+
+    const createBulkCoursesMutation = useMutation({
+        mutationFn: (courses: any[]) => coursesApi.createCoursesBulk(courses),
+        onSuccess: (created) => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            setShowBulkCourseModal(false);
+            setBulkCourseTitles('');
+            addToast(`${created.length} courses created successfully.`, 'success');
         },
     });
 
@@ -161,7 +175,7 @@ export default function CourseManagerPage() {
             addToast(`Generated ${res.generated_count} quiz question(s)`, 'success');
             setModal({ mode: null });
         },
-        onError: () => addToast('AI generation failed for module quiz.', 'error'),
+        onError: (error) => addToast(getApiErrorMessage(error, 'AI generation failed for module quiz.'), 'error'),
     });
 
     const generateAssessmentMutation = useMutation({
@@ -173,7 +187,7 @@ export default function CourseManagerPage() {
             addToast(`Generated ${res.generated_count} assessment question(s)`, 'success');
             setModal({ mode: null });
         },
-        onError: () => addToast('AI generation failed for assessment.', 'error'),
+        onError: (error) => addToast(getApiErrorMessage(error, 'AI generation failed for assessment.'), 'error'),
     });
 
     const openModal = (mode: ModalMode, partial?: Partial<ModalState>, initial?: Record<string, any>) => {
@@ -201,8 +215,12 @@ export default function CourseManagerPage() {
         const payload: Record<string, any> = {
             title: (form.title || '').trim(),
             description: form.description || undefined,
+            short_description: form.short_description || undefined,
+            prerequisites: (form.prerequisites || '').split('\n').map((v: string) => v.trim()).filter(Boolean),
+            learning_outcomes: (form.learning_outcomes || '').split('\n').map((v: string) => v.trim()).filter(Boolean),
             instructor_name: form.instructor_name || '',
             duration_hours: normalizeDuration(form.duration_hours),
+            estimated_weeks: Number(form.estimated_weeks || 1),
             skill_level: form.skill_level || 'beginner',
             tags: normalizeTags(form.tags),
             thumbnail_url: form.thumbnail_url || undefined,
@@ -265,6 +283,27 @@ export default function CourseManagerPage() {
         }
     };
 
+    const handleBulkCourseCreate = () => {
+        const titles = bulkCourseTitles
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+        if (!titles.length) {
+            addToast('Please provide at least one course title.', 'error');
+            return;
+        }
+
+        const basePayload = buildCoursePayload();
+        const coursesPayload = titles.map((title) => ({
+            ...basePayload,
+            title,
+            short_description: basePayload.short_description || title,
+            description: basePayload.description || `Detailed curriculum for ${title}.`,
+        }));
+
+        createBulkCoursesMutation.mutate(coursesPayload);
+    };
+
     const handleGenerateWithAI = () => {
         const payload = {
             prompt: (form.ai_prompt || '').trim(),
@@ -323,12 +362,20 @@ export default function CourseManagerPage() {
                     <h1 className="text-2xl font-bold text-slate-900">Course Manager</h1>
                     <p className="text-slate-500 text-sm mt-0.5">Create and manage courses, modules, quizzes, and assessments.</p>
                 </div>
-                <button
-                    onClick={() => openModal('course')}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors"
-                >
-                    <Plus className="h-4 w-4" /> New Course
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => openModal('course')}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors"
+                    >
+                        <Plus className="h-4 w-4" /> New Course
+                    </button>
+                    <button
+                        onClick={() => setShowBulkCourseModal(true)}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
+                    >
+                        <Plus className="h-4 w-4" /> Bulk Create
+                    </button>
+                </div>
             </div>
 
             {courses.length === 0 && (
@@ -359,7 +406,12 @@ export default function CourseManagerPage() {
                                 </span>
                                 <div className="flex items-center gap-1.5">
                                     <button
-                                        onClick={() => openModal('course', {}, { ...course, tags: (course.tags || []).join(', ') })}
+                                        onClick={() => openModal('course', {}, {
+                                            ...course,
+                                            tags: (course.tags || []).join(', '),
+                                            prerequisites: (course.prerequisites || []).join('\n'),
+                                            learning_outcomes: (course.learning_outcomes || []).join('\n'),
+                                        })}
                                         className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400"
                                         title="Edit"
                                     ><Edit2 className="h-3.5 w-3.5" /></button>
@@ -487,10 +539,14 @@ export default function CourseManagerPage() {
                         {modal.mode === 'course' && (<>
                             <FieldGroup label="Title"><input className={inputCls} value={form.title || ''} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Course title" /></FieldGroup>
                             <FieldGroup label="Description"><textarea className={inputCls} rows={3} value={form.description || ''} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Course description" /></FieldGroup>
+                            <FieldGroup label="Short Description"><input className={inputCls} value={form.short_description || ''} onChange={e => setForm(p => ({ ...p, short_description: e.target.value }))} placeholder="Short summary for cards" /></FieldGroup>
                             <div className="grid grid-cols-2 gap-3">
                                 <FieldGroup label="Instructor"><input className={inputCls} value={form.instructor_name || ''} onChange={e => setForm(p => ({ ...p, instructor_name: e.target.value }))} placeholder="Instructor name" /></FieldGroup>
                                 <FieldGroup label="Duration (hours)"><input type="number" className={inputCls} value={form.duration_hours ?? ''} onChange={e => setForm(p => ({ ...p, duration_hours: e.target.value }))} placeholder="1.5" /></FieldGroup>
                             </div>
+                            <FieldGroup label="Estimated Weeks"><input type="number" className={inputCls} value={form.estimated_weeks ?? 1} onChange={e => setForm(p => ({ ...p, estimated_weeks: e.target.value }))} placeholder="1" /></FieldGroup>
+                            <FieldGroup label="Prerequisites (one per line)"><textarea className={inputCls} rows={2} value={form.prerequisites || ''} onChange={e => setForm(p => ({ ...p, prerequisites: e.target.value }))} placeholder="Basic teaching experience" /></FieldGroup>
+                            <FieldGroup label="Learning Outcomes (one per line)"><textarea className={inputCls} rows={3} value={form.learning_outcomes || ''} onChange={e => setForm(p => ({ ...p, learning_outcomes: e.target.value }))} placeholder="Apply active learning techniques" /></FieldGroup>
                             <div className="grid grid-cols-2 gap-3">
                                 <FieldGroup label="Skill Level">
                                     <select className={inputCls} value={form.skill_level || 'beginner'} onChange={e => setForm(p => ({ ...p, skill_level: e.target.value }))}>
@@ -586,6 +642,28 @@ export default function CourseManagerPage() {
                             className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
                         >
                             <Save className="h-4 w-4" /> {modal.quizId || modal.assessmentQuestionId || form.id ? 'Update' : 'Save'}
+                        </button>
+                    </div>
+                </Modal>
+            )}
+
+            {showBulkCourseModal && (
+                <Modal title="Bulk Create Courses" onClose={() => setShowBulkCourseModal(false)}>
+                    <div className="space-y-3">
+                        <p className="text-xs text-slate-500">One title per line. Current course form values are reused for all rows.</p>
+                        <textarea
+                            className={inputCls}
+                            rows={10}
+                            value={bulkCourseTitles}
+                            onChange={(e) => setBulkCourseTitles(e.target.value)}
+                            placeholder={"AI Pedagogy Essentials\nResearch Methods Workshop\nDigital Teaching Toolkit"}
+                        />
+                        <button
+                            onClick={handleBulkCourseCreate}
+                            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60"
+                            disabled={createBulkCoursesMutation.isPending}
+                        >
+                            {createBulkCoursesMutation.isPending ? 'Creating...' : 'Create Courses'}
                         </button>
                     </div>
                 </Modal>

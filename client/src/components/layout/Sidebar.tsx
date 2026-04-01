@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { cn } from '../../lib/utils';
 import { useSidebar } from '../../app/providers/SidebarProvider';
+import { facultyApi, resolveBackendAssetUrl } from '../../lib/api/faculty';
 import {
   LayoutDashboard,
   BookOpen,
@@ -31,11 +33,21 @@ export function Sidebar() {
   const { user } = useAuth();
   const { isMobileOpen, closeSidebar } = useSidebar();
   const location = useLocation();
+  const isFaculty = user?.role === 'faculty';
   const [testsOpen, setTestsOpen] = useState(
     location.pathname.startsWith('/faculty/tests') || location.pathname.startsWith('/faculty/practice')
   );
 
+  const { data: facultyProfile } = useQuery({
+    queryKey: ['faculty-profile', 'me'],
+    queryFn: facultyApi.getMe,
+    enabled: !!user && isFaculty,
+    staleTime: 60 * 1000,
+  });
+
   if (!user) return null;
+
+  const sidebarAvatar = resolveBackendAssetUrl(facultyProfile?.profile_image_url);
 
   const isTestsActive =
     location.pathname.startsWith('/faculty/tests') ||
@@ -202,8 +214,12 @@ export function Sidebar() {
         {/* User Profile */}
         <div className="p-4 mt-auto">
           <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-3 border border-slate-100">
-            <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-sm flex-shrink-0">
-              {user.name.charAt(0)}
+            <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-sm flex-shrink-0 overflow-hidden">
+              {sidebarAvatar ? (
+                <img src={sidebarAvatar} alt={user.name} className="h-full w-full object-cover" />
+              ) : (
+                user.name.charAt(0)
+              )}
             </div>
             <div className="flex flex-col min-w-0">
               <span className="text-sm font-bold text-slate-900 truncate">{user.name}</span>

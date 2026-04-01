@@ -192,13 +192,13 @@ export default function ProgramDetails() {
                             )}
                         </p>
                         {isEnrolled ? (
-                            <Button size="lg" variant="secondary" disabled className="min-w-[200px]">
+                            <Button size="lg" variant="secondary" disabled className="w-full sm:w-auto sm:min-w-[200px]">
                                 Already Enrolled
                             </Button>
                         ) : (
                             <Button
                                 size="lg"
-                                className="min-w-[200px]"
+                                className="w-full sm:w-auto sm:min-w-[200px]"
                                 onClick={() => enrollMutation.mutate()}
                                 disabled={enrollMutation.isPending || (program.enrollments?.length || 0) >= program.seats}
                             >

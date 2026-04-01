@@ -16,10 +16,14 @@ export interface Test {
     id: string;
     title: string;
     description?: string;
+    short_description?: string;
+    instructions?: string;
+    tags: string[];
     domain: SkillDomain;
     difficulty: Difficulty;
     pass_marks: number;
     time_limit_minutes: number;
+    is_published: boolean;
     total_questions: number;
     created_by_id: string;
     created_at: string;
@@ -31,10 +35,14 @@ export interface Test {
 export interface TestCreate {
     title: string;
     description?: string;
+    short_description?: string;
+    instructions?: string;
+    tags?: string[];
     domain: SkillDomain;
     difficulty?: Difficulty;
     pass_marks?: number;
     time_limit_minutes?: number;
+    is_published?: boolean;
     pack_ids: string[];
     question_ids?: string[];
 }
@@ -54,6 +62,11 @@ export const testsApi = {
 
     createTest: async (testData: TestCreate): Promise<Test> => {
         const response = await http.post<Test>('/api/v1/tests/', testData);
+        return response.data;
+    },
+
+    createTestsBulk: async (tests: TestCreate[]): Promise<Test[]> => {
+        const response = await http.post<Test[]>('/api/v1/tests/bulk', { tests });
         return response.data;
     },
 

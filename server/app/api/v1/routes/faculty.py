@@ -2,7 +2,7 @@ import logging
 from math import ceil
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -147,6 +147,24 @@ async def update_my_profile(
 ):
     service = FacultyService(db)
     profile = await service.update_profile(current_user.id, profile_in)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Faculty profile not found")
+    return profile
+
+@router.post("/me/profile-image", response_model=FacultySchema)
+async def upload_my_profile_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_faculty_user),
+    db: AsyncSession = Depends(get_session)
+):
+    service = FacultyService(db)
+    try:
+        profile = await service.upload_profile_image(current_user.id, file)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        await file.close()
+
     if not profile:
         raise HTTPException(status_code=404, detail="Faculty profile not found")
     return profile

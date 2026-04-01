@@ -3,6 +3,7 @@
 from logging.config import fileConfig
 import os
 import sys
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -34,7 +35,27 @@ if db_url.startswith("postgresql+asyncpg://"):
 elif db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+psycopg://")
 
-config.set_main_option("sqlalchemy.url", db_url)
+# psycopg/libpq expects sslmode rather than asyncpg-style ssl.
+parts = urlsplit(db_url)
+if parts.query:
+    query_pairs = parse_qsl(parts.query, keep_blank_values=True)
+    has_sslmode = any(k == "sslmode" for k, _ in query_pairs)
+    if not has_sslmode:
+        converted = []
+        changed = False
+        for key, val in query_pairs:
+            if key == "ssl":
+                converted.append(("sslmode", val))
+                changed = True
+            else:
+                converted.append((key, val))
+        if changed:
+            db_url = urlunsplit(
+                (parts.scheme, parts.netloc, parts.path, urlencode(converted), parts.fragment)
+            )
+
+# Escape % for ConfigParser interpolation (e.g. URL-encoded passwords like %24).
+config.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:

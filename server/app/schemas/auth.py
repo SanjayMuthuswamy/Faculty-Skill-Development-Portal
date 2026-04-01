@@ -1,6 +1,6 @@
 
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -17,3 +17,12 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    new_password: str = Field(min_length=6)
+
+
+class ResetPasswordResponse(BaseModel):
+    message: str

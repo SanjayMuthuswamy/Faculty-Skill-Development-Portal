@@ -16,6 +16,10 @@ interface UserResponse {
   created_at: string
 }
 
+interface ResetPasswordResponse {
+  message: string
+}
+
 export const authApi = {
   login: async (email: string, password: string): Promise<TokenResponse> => {
     const response = await http.post<TokenResponse>('/api/v1/auth/login', {
@@ -32,5 +36,13 @@ export const authApi = {
 
   logout: (): void => {
     storage.clear()
+  },
+
+  resetPassword: async (email: string, newPassword: string): Promise<ResetPasswordResponse> => {
+    const response = await http.post<ResetPasswordResponse>('/api/v1/auth/reset-password', {
+      email,
+      new_password: newPassword,
+    })
+    return response.data
   },
 }
