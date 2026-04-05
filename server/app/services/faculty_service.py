@@ -1,9 +1,11 @@
 
+import os
 from pathlib import Path
 from typing import Optional, List
 from uuid import uuid4
 
 from fastapi import UploadFile
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, attributes
@@ -17,9 +19,29 @@ from app.models.faculty_skill import FacultySkill, SkillStatus
 from app.models.skill import Skill
 from app.models.faculty_news_preferences import FacultyNewsPreferences
 from app.models.course_enrollment import CourseEnrollment
+from app.models.course_attempt import CourseAttempt
 from app.models.course import Course
 from app.models.course_module import CourseModule
-from app.schemas.faculty import FacultyProfileUpdate, FacultyCreateRequest
+from app.models.lesson_progress import LessonProgress
+from app.models.attempt import Attempt
+from app.models.attempt_answer import AttemptAnswer
+from app.models.performance_analysis import PerformanceAnalysis
+from app.models.growth_plan import GrowthPlan
+from app.models.growth_week import GrowthWeek
+from app.models.week_task import WeekTask
+from app.models.enrollment import Enrollment
+from app.models.practice_set import PracticeSet, PracticeSetQuestion
+from app.models.faculty_query import FacultyQuery
+from app.models.discussion import Discussion, DiscussionReply
+from app.models.roadmap import Roadmap
+from app.models.roadmap_week import RoadmapWeek
+from app.models.roadmap_item import RoadmapItem
+from app.schemas.faculty import (
+    FacultyProfileUpdate,
+    FacultyCreateRequest,
+    FacultyAccountCreateRequest,
+    FacultyAccountUpdateRequest,
+)
 from app.schemas.skill import FacultySkillCreate, FacultySkillUpdate
 from app.schemas.news import NewsPreferencesUpdate
 
@@ -95,8 +117,9 @@ class FacultyService:
 
     async def register_faculty(self, faculty_in: FacultyCreateRequest) -> FacultyProfile:
         """Register a new faculty member: Create User, hash password, and create Faculty Profile."""
+        normalized_email = faculty_in.email.lower().strip()
         # 1. Check for duplicate email
-        result = await self.db.execute(select(User).where(User.email == faculty_in.email))
+        result = await self.db.execute(select(User).where(User.email == normalized_email))
         existing_user = result.scalar_one_or_none()
         if existing_user:
             raise ValueError(f"User with email {faculty_in.email} already exists")
@@ -105,7 +128,7 @@ class FacultyService:
         new_user = User(
             id=str(uuid4()),
             name=faculty_in.name,
-            email=faculty_in.email,
+            email=normalized_email,
             password_hash=get_password_hash(faculty_in.password),
             role=UserRole.FACULTY,
             is_active=True
@@ -135,6 +158,138 @@ class FacultyService:
 
         # Re-fetch with all relationships loaded for proper serialization
         return await self.get_by_user_id(new_user.id)
+
+    async def create_faculty_account(self, faculty_in: FacultyAccountCreateRequest) -> FacultyProfile:
+        profile = await self.register_faculty(faculty_in)
+        if faculty_in.is_active is False:
+            result = await self.db.execute(select(User).where(User.id == profile.user_id))
+            user = result.scalar_one()
+            user.is_active = False
+            await self.db.commit()
+            return await self.get_by_user_id(profile.user_id)
+        return profile
+
+    def _remove_profile_image_file(self, profile: FacultyProfile) -> None:
+        image_url = (profile.profile_image_url or "").strip()
+        if not image_url.startswith("/uploads/profile-images/"):
+            return
+        file_name = image_url.rsplit("/", 1)[-1]
+        if not file_name:
+            return
+        file_path = PROFILE_IMAGE_UPLOAD_DIR / file_name
+        if file_path.exists():
+            os.unlink(file_path)
+
+    async def get_by_faculty_profile_id(self, faculty_id: str) -> Optional[FacultyProfile]:
+        result = await self.db.execute(
+            select(FacultyProfile)
+            .where(FacultyProfile.id == faculty_id)
+            .options(
+                selectinload(FacultyProfile.user),
+                selectinload(FacultyProfile.skills).selectinload(FacultySkill.skill),
+                selectinload(FacultyProfile.course_enrollments)
+                .selectinload(CourseEnrollment.course)
+                .selectinload(Course.modules)
+                .selectinload(CourseModule.quiz_questions)
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def update_faculty_account(
+        self,
+        faculty_id: str,
+        update_in: FacultyAccountUpdateRequest,
+    ) -> Optional[FacultyProfile]:
+        profile = await self.get_by_faculty_profile_id(faculty_id)
+        if not profile or not profile.user:
+            return None
+
+        duplicate = await self.db.execute(
+            select(User).where(
+                User.email == update_in.email.lower(),
+                User.id != profile.user.id,
+            )
+        )
+        if duplicate.scalar_one_or_none():
+            raise ValueError(f"User with email {update_in.email} already exists")
+
+        profile.user.name = update_in.name.strip()
+        profile.user.email = update_in.email.lower().strip()
+        profile.user.is_active = update_in.is_active
+        profile.department = update_in.department.strip()
+        profile.designation = update_in.designation.strip()
+        profile.experience_years = update_in.experience_years
+
+        await self.db.commit()
+        return await self.get_by_faculty_profile_id(faculty_id)
+
+    async def reset_faculty_password(self, faculty_id: str, new_password: str) -> Optional[FacultyProfile]:
+        profile = await self.get_by_faculty_profile_id(faculty_id)
+        if not profile or not profile.user:
+            return None
+
+        profile.user.password_hash = get_password_hash(new_password)
+        await self.db.commit()
+        return await self.get_by_faculty_profile_id(faculty_id)
+
+    async def delete_faculty_account(self, faculty_id: str) -> bool:
+        profile = await self.get_by_faculty_profile_id(faculty_id)
+        if not profile:
+            return False
+        user_id = profile.user_id
+        profile_image_url = profile.profile_image_url
+
+        attempt_ids = select(Attempt.id).where(Attempt.faculty_id == faculty_id)
+        growth_plan_ids = select(GrowthPlan.id).where(GrowthPlan.faculty_id == faculty_id)
+        growth_week_ids = select(GrowthWeek.id).where(GrowthWeek.plan_id.in_(growth_plan_ids))
+        practice_set_ids = select(PracticeSet.id).where(PracticeSet.faculty_id == faculty_id)
+        roadmap_ids = select(Roadmap.id).where(Roadmap.user_id == user_id)
+        roadmap_week_ids = select(RoadmapWeek.id).where(RoadmapWeek.roadmap_id.in_(roadmap_ids))
+        discussion_ids = select(Discussion.id).where(Discussion.faculty_id == user_id)
+
+        try:
+            await self.db.execute(delete(PerformanceAnalysis).where(PerformanceAnalysis.attempt_id.in_(attempt_ids)))
+            await self.db.execute(delete(PerformanceAnalysis).where(PerformanceAnalysis.user_id == user_id))
+            await self.db.execute(delete(AttemptAnswer).where(AttemptAnswer.attempt_id.in_(attempt_ids)))
+            await self.db.execute(delete(Attempt).where(Attempt.faculty_id == faculty_id))
+
+            await self.db.execute(delete(WeekTask).where(WeekTask.week_id.in_(growth_week_ids)))
+            await self.db.execute(delete(GrowthWeek).where(GrowthWeek.plan_id.in_(growth_plan_ids)))
+            await self.db.execute(delete(GrowthPlan).where(GrowthPlan.faculty_id == faculty_id))
+
+            await self.db.execute(delete(PracticeSetQuestion).where(PracticeSetQuestion.set_id.in_(practice_set_ids)))
+            await self.db.execute(delete(PracticeSet).where(PracticeSet.faculty_id == faculty_id))
+
+            await self.db.execute(delete(FacultySkill).where(FacultySkill.faculty_id == faculty_id))
+            await self.db.execute(delete(Enrollment).where(Enrollment.faculty_id == faculty_id))
+            await self.db.execute(delete(FacultyNewsPreferences).where(FacultyNewsPreferences.faculty_id == faculty_id))
+
+            await self.db.execute(delete(RoadmapItem).where(RoadmapItem.week_id.in_(roadmap_week_ids)))
+            await self.db.execute(delete(RoadmapWeek).where(RoadmapWeek.roadmap_id.in_(roadmap_ids)))
+            await self.db.execute(delete(Roadmap).where(Roadmap.user_id == user_id))
+
+            await self.db.execute(
+                delete(DiscussionReply).where(
+                    (DiscussionReply.faculty_id == user_id) |
+                    (DiscussionReply.discussion_id.in_(discussion_ids))
+                )
+            )
+            await self.db.execute(delete(Discussion).where(Discussion.faculty_id == user_id))
+            await self.db.execute(delete(FacultyQuery).where(FacultyQuery.faculty_id == user_id))
+            await self.db.execute(delete(LessonProgress).where(LessonProgress.faculty_id == user_id))
+            await self.db.execute(delete(CourseAttempt).where(CourseAttempt.faculty_id == user_id))
+            await self.db.execute(delete(CourseEnrollment).where(CourseEnrollment.faculty_id == user_id))
+
+            await self.db.execute(delete(FacultyProfile).where(FacultyProfile.id == faculty_id))
+            await self.db.execute(delete(User).where(User.id == user_id))
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        if profile_image_url:
+            self._remove_profile_image_file(profile)
+        return True
 
     async def update_profile(self, user_id: str, profile_in: FacultyProfileUpdate) -> Optional[FacultyProfile]:
         profile = await self.get_by_user_id(user_id)

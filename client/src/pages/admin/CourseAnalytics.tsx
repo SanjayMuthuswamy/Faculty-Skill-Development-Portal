@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { coursesApi, CourseAnalytics } from '../../lib/api/courses';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Loader2, Users, CheckCircle, TrendingUp, BookOpen } from 'lucide-react';
-import { useMemo } from 'react';
+import { Users, CheckCircle, TrendingUp, BookOpen } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { LoadingState } from '../../components/ui/LoadingState';
+import { Pagination } from '../../components/ui/Pagination';
 
 const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 const SUMMARY_ICON_STYLES: Record<string, { bg: string; text: string }> = {
@@ -41,6 +43,9 @@ function EnrollmentTooltip({ active, payload }: any) {
 }
 
 export default function CourseAnalyticsPage() {
+    const [detailPage, setDetailPage] = useState(1);
+    const ITEMS_PER_PAGE = 8;
+
     const { data: rawAnalytics, isLoading } = useQuery({
         queryKey: ['course-analytics'],
         queryFn: coursesApi.getAnalytics,
@@ -71,18 +76,23 @@ export default function CourseAnalyticsPage() {
         .sort((a, b) => b.total_enrolled - a.total_enrolled);
 
     const barChartHeight = Math.max(300, enrollmentChartData.length * 44);
+    const totalDetailPages = Math.max(1, Math.ceil(analytics.length / ITEMS_PER_PAGE));
+    const pagedAnalytics = analytics.slice(
+        (detailPage - 1) * ITEMS_PER_PAGE,
+        detailPage * ITEMS_PER_PAGE
+    );
+
+    useEffect(() => {
+        setDetailPage(1);
+    }, [analytics.length]);
 
     if (isLoading) {
-        return (
-            <div className="flex justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            </div>
-        );
+        return <LoadingState label="Loading course analytics" />;
     }
 
     return (
         <div className="space-y-6">
-            <div>
+            <div className="min-w-0">
                 <h1 className="text-2xl font-bold text-slate-900">Course Analytics</h1>
                 <p className="text-slate-500 text-sm mt-0.5">Track enrollment, completion rates, and performance across all courses.</p>
             </div>
@@ -168,10 +178,10 @@ export default function CourseAnalyticsPage() {
                         </ResponsiveContainer>
                     </div>
 
-                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 lg:col-span-2">
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 lg:col-span-2">
                         <h3 className="font-bold text-slate-800 mb-4">Detailed Breakdown</h3>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
+                            <table className="w-full min-w-[640px] text-sm">
                                 <thead>
                                     <tr className="text-xs text-slate-400 font-semibold border-b border-slate-100">
                                         <th className="text-left pb-3 pr-4">Course</th>
@@ -182,12 +192,12 @@ export default function CourseAnalyticsPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
-                                    {analytics.map((c: CourseAnalytics) => {
+                                    {pagedAnalytics.map((c: CourseAnalytics) => {
                                         const completionRate = toSafeNumber(c?.completion_rate);
                                         const averageScore = toSafeNumber(c?.average_score);
                                         return (
                                             <tr key={c?.course_id || Math.random()} className="hover:bg-slate-50 transition-colors">
-                                                <td className="py-3 pr-4 font-medium text-slate-800">{c?.course_title || 'Unnamed Course'}</td>
+                                                <td className="py-3 pr-4 font-medium text-slate-800 min-w-[220px]">{c?.course_title || 'Unnamed Course'}</td>
                                                 <td className="py-3 pr-4 text-right text-slate-600">{toSafeNumber(c?.total_enrolled)}</td>
                                                 <td className="py-3 pr-4 text-right text-slate-600">{toSafeNumber(c?.total_completed)}</td>
                                                 <td className="py-3 pr-4 text-right">
@@ -206,6 +216,13 @@ export default function CourseAnalyticsPage() {
                                 </tbody>
                             </table>
                         </div>
+                        {analytics.length > ITEMS_PER_PAGE && (
+                            <Pagination
+                                currentPage={detailPage}
+                                totalPages={totalDetailPages}
+                                onPageChange={setDetailPage}
+                            />
+                        )}
                     </div>
                 </div>
             )}

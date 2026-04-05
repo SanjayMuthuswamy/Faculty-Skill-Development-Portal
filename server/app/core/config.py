@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     ENABLE_GZIP: bool = True
     GZIP_MINIMUM_SIZE: int = 1000
     ALLOWED_HOSTS: list[str] = ["*"]
+    ENABLE_APP_CACHE: bool = True
+    APP_CACHE_TTL_SECONDS: int = 120
+    APP_CACHE_SHORT_TTL_SECONDS: int = 45
 
     # Database - Override with DATABASE_URL environment variable
     DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/fsdp_db"

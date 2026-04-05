@@ -1,7 +1,7 @@
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Module Quiz ─────────────────────────────────────────────────────────────
@@ -113,6 +113,11 @@ class CourseOut(BaseModel):
     created_at: datetime
     modules: List[CourseModuleOut] = Field(default_factory=list)
 
+    @field_validator("prerequisites", "learning_outcomes", "tags", mode="before")
+    @classmethod
+    def coerce_null_lists(cls, value):
+        return [] if value is None else value
+
     class Config:
         from_attributes = True
 
@@ -132,6 +137,11 @@ class CourseListOut(BaseModel):
     is_published: bool
     created_at: datetime
     module_count: int = 0
+
+    @field_validator("prerequisites", "learning_outcomes", "tags", mode="before")
+    @classmethod
+    def coerce_null_lists(cls, value):
+        return [] if value is None else value
 
     class Config:
         from_attributes = True

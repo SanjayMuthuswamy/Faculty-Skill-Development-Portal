@@ -63,12 +63,12 @@ export default function AIQuestionGen() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">AI Question Generator</h1>
-                    <p className="text-gray-500">Describe a topic and let AI draft MCQ questions for you.</p>
+                    <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">AI Question Generator</h1>
+                    <p className="max-w-xl text-gray-500">Describe a topic and let AI draft MCQ questions for you.</p>
                 </div>
-                <Button variant="outline" onClick={() => navigate('/admin/question-packs')}>
+                <Button variant="outline" onClick={() => navigate('/admin/question-packs')} className="w-full sm:w-auto">
                     View Question Packs
                 </Button>
             </div>

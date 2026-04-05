@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { aiQuestionsApi, QuestionDraft, QuestionDraftStatus } from '../../lib/api/aiQuestions';
@@ -10,7 +10,7 @@ import { Difficulty } from '../../lib/api/tests';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { useToast } from '../../components/ui/Toast';
-import { CheckCircle2, XCircle, Edit3, Save, ArrowLeft, CheckCircle, AlertCircle, Package } from 'lucide-react';
+import { CheckCircle2, XCircle, Edit3, Save, ArrowLeft, CheckCircle, AlertCircle, Package, CheckSquare, Square } from 'lucide-react';
 import { SkillDomain } from '../../lib/api/skills';
 
 export default function DraftReview() {
@@ -21,6 +21,7 @@ export default function DraftReview() {
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<QuestionDraft | null>(null);
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+    const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
     // Publishing configuration state
     const [publishConfig, setPublishConfig] = useState<{
@@ -49,13 +50,14 @@ export default function DraftReview() {
     });
 
     // Preset config when draft loads
-    useMemo(() => {
+    useEffect(() => {
         if (draft) {
             setPublishConfig(prev => ({
                 ...prev,
                 topic: draft.topic,
                 difficulty: draft.difficulty as any || Difficulty.INTERMEDIATE
             }));
+            setSelectedQuestionIds([]);
         }
     }, [draft]);
 
@@ -103,6 +105,52 @@ export default function DraftReview() {
     const approvedCount = draft.questions.filter(q => q.draft_status === QuestionDraftStatus.APPROVED).length;
     const pendingCount = draft.questions.filter(q => q.draft_status === QuestionDraftStatus.PENDING).length;
     const isPublished = draft.status === 'published';
+    const selectableQuestions = draft.questions.filter(q => q.draft_status === QuestionDraftStatus.PENDING);
+    const selectableQuestionIds = selectableQuestions.map(q => q.id);
+    const allSelectableSelected = selectableQuestionIds.length > 0 && selectableQuestionIds.every(id => selectedQuestionIds.includes(id));
+    const selectedPendingCount = selectedQuestionIds.length;
+
+    const toggleQuestionSelection = (questionId: string) => {
+        setSelectedQuestionIds(prev =>
+            prev.includes(questionId)
+                ? prev.filter(id => id !== questionId)
+                : [...prev, questionId]
+        );
+    };
+
+    const toggleSelectAll = () => {
+        setSelectedQuestionIds(allSelectableSelected ? [] : selectableQuestionIds);
+    };
+
+    const runBulkAction = async (action: 'approve' | 'reject') => {
+        if (selectedQuestionIds.length === 0) {
+            addToast('Select at least one pending question first', 'warning');
+            return;
+        }
+
+        const selectedIndexes = draft.questions
+            .map((question, index) => ({ question, index }))
+            .filter(({ question }) => selectedQuestionIds.includes(question.id))
+            .map(({ index }) => index);
+
+        try {
+            if (action === 'approve') {
+                await Promise.all(selectedIndexes.map((index) => aiQuestionsApi.approveQuestion(id!, index)));
+            } else {
+                await Promise.all(selectedIndexes.map((index) => aiQuestionsApi.rejectQuestion(id!, index)));
+            }
+            await queryClient.invalidateQueries({ queryKey: ['questionDrafts', id] });
+            setSelectedQuestionIds([]);
+            addToast(
+                action === 'approve'
+                    ? `Approved ${selectedIndexes.length} question${selectedIndexes.length === 1 ? '' : 's'}`
+                    : `Rejected ${selectedIndexes.length} question${selectedIndexes.length === 1 ? '' : 's'}`,
+                'success'
+            );
+        } catch {
+            addToast(`Failed to ${action} selected questions`, 'destructive');
+        }
+    };
 
     const handleEdit = (index: number) => {
         setEditingIndex(index);
@@ -133,14 +181,46 @@ export default function DraftReview() {
                     </div>
                 </div>
                 {!isPublished && (
-                    <Button
-                        disabled={approvedCount === 0 || pendingCount > 0}
-                        onClick={() => setIsPublishModalOpen(true)}
-                        className="bg-green-600 hover:bg-green-700 h-10 px-6"
-                    >
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Finish & Publish ({approvedCount})
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                            variant="outline"
+                            onClick={toggleSelectAll}
+                            disabled={selectableQuestionIds.length === 0}
+                        >
+                            {allSelectableSelected ? (
+                                <CheckSquare className="mr-2 h-4 w-4" />
+                            ) : (
+                                <Square className="mr-2 h-4 w-4" />
+                            )}
+                            {allSelectableSelected ? 'Clear Selection' : 'Select All Pending'}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => runBulkAction('approve')}
+                            disabled={selectedPendingCount === 0 || approveMutation.isPending || rejectMutation.isPending}
+                            className="border-green-200 text-green-700 hover:bg-green-50"
+                        >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Approve Selected ({selectedPendingCount})
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => runBulkAction('reject')}
+                            disabled={selectedPendingCount === 0 || approveMutation.isPending || rejectMutation.isPending}
+                            className="border-red-200 text-red-700 hover:bg-red-50"
+                        >
+                            <XCircle className="mr-2 h-4 w-4" />
+                            Reject Selected
+                        </Button>
+                        <Button
+                            disabled={approvedCount === 0 || pendingCount > 0}
+                            onClick={() => setIsPublishModalOpen(true)}
+                            className="bg-green-600 hover:bg-green-700 h-10 px-6"
+                        >
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Finish & Publish ({approvedCount})
+                        </Button>
+                    </div>
                 )}
             </div>
 
@@ -161,6 +241,20 @@ export default function DraftReview() {
                             <div className="flex justify-between items-start">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
+                                        {!isPublished && q.draft_status === QuestionDraftStatus.PENDING && (
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleQuestionSelection(q.id)}
+                                                className="text-gray-400 hover:text-blue-600"
+                                                aria-label={selectedQuestionIds.includes(q.id) ? 'Deselect question' : 'Select question'}
+                                            >
+                                                {selectedQuestionIds.includes(q.id) ? (
+                                                    <CheckSquare className="h-4 w-4 text-blue-600" />
+                                                ) : (
+                                                    <Square className="h-4 w-4" />
+                                                )}
+                                            </button>
+                                        )}
                                         <Badge variant="outline">Q{idx + 1}</Badge>
                                         <Badge variant={
                                             q.draft_status === QuestionDraftStatus.APPROVED ? 'success' :

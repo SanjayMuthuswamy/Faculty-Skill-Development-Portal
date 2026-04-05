@@ -20,6 +20,7 @@ import {
   Bot,
   BookMarked,
   PieChart,
+  UserPlus,
   X,
   ChevronDown,
   ClipboardList,
@@ -67,6 +68,7 @@ export function Sidebar() {
 
   const adminLinks = [
     { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/admin/faculty-accounts', label: 'Faculty Accounts', icon: UserPlus },
     { to: '/admin/faculty', label: 'Faculty Analytics', icon: BarChart },
     { to: '/admin/programs', label: 'Programs', icon: BookOpen },
     { to: '/admin/question-packs', label: 'Question Packs', icon: Package },
@@ -74,7 +76,7 @@ export function Sidebar() {
     { to: '/admin/courses', label: 'Courses', icon: BookMarked },
     { to: '/admin/course-analytics', label: 'Course Analytics', icon: PieChart },
     { to: '/admin/queries', label: 'Faculty Queries', icon: HelpCircle },
-    { to: '/admin/ai-insights', label: 'AI Insights', icon: Sparkles },
+    { to: '/admin/ai-insights', label: 'AI Question Gen', icon: Sparkles },
   ];
 
   const navItemCls = (active: boolean) =>

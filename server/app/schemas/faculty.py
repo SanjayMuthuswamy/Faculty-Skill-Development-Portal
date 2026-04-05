@@ -54,6 +54,20 @@ class FacultyCreateRequest(BaseModel):
     experience_years: int
     password: str  # Admin provided temporary password
 
+class FacultyAccountCreateRequest(FacultyCreateRequest):
+    is_active: bool = True
+
+class FacultyAccountUpdateRequest(BaseModel):
+    name: str
+    email: str
+    department: str
+    designation: str
+    experience_years: int
+    is_active: bool = True
+
+class FacultyPasswordResetRequest(BaseModel):
+    new_password: str
+
 class SkillSuggestions(BaseModel):
     suggested_skills: List[str]
     reasoning: str

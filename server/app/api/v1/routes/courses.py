@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.api.v1.deps import get_current_user
+from app.core.cache import app_cache
+from app.core.config import settings
 from app.models.user import User
 from app.models.enums import UserRole
 from app.services.course_service import CourseService
@@ -24,6 +26,20 @@ from app.schemas.course import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _course_payload_has_missing_quizzes(course: dict | None) -> bool:
+    if not course:
+        return False
+    modules = course.get("modules") or []
+    return any(not (module.get("quiz_questions") or []) for module in modules)
+
+
+def _course_payload_has_missing_videos(course: dict | None) -> bool:
+    if not course:
+        return False
+    modules = course.get("modules") or []
+    return any(not (module.get("video_url") or "").strip() or "example.com" in (module.get("video_url") or "").lower() for module in modules)
 
 
 def _to_llm_difficulty(value: str | None) -> str:
@@ -69,13 +85,18 @@ async def list_courses(
     current_user: User = Depends(get_current_user)
 ):
     """List courses — faculty sees published only, admin sees all."""
-    svc = CourseService(db)
     published_only = current_user.role != UserRole.ADMIN
-    courses = await svc.get_courses(published_only=published_only)
-    return [
-        {**c.__dict__, "module_count": len(c.modules)}
-        for c in courses
-    ]
+    cache_key = f"courses:list:{'published' if published_only else 'all'}"
+
+    async def load_courses():
+        svc = CourseService(db)
+        courses = await svc.get_courses(published_only=published_only)
+        return [
+            CourseListOut.model_validate({**c.__dict__, "module_count": len(c.modules)}).model_dump(mode="json")
+            for c in courses
+        ]
+
+    return await app_cache.get_or_set(cache_key, load_courses, ttl_seconds=settings.APP_CACHE_TTL_SECONDS)
 
 
 @router.post("", response_model=CourseOut, status_code=201)
@@ -88,6 +109,7 @@ async def create_course(
     payload = body.model_dump()
     _validate_course_publish_payload(payload)
     course = await svc.create_course(payload, creator_id=current_user.id)
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
     return course
 
 
@@ -108,6 +130,7 @@ async def create_courses_bulk(
         created_course = await svc.create_course(payload, creator_id=current_user.id)
         created.append(created_course)
 
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
     return created
 
 
@@ -116,8 +139,14 @@ async def my_enrollments(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    svc = CourseService(db)
-    return await svc.get_my_enrollments(current_user.id)
+    cache_key = f"courses:enrollments:{current_user.id}"
+
+    async def load_enrollments():
+        svc = CourseService(db)
+        enrollments = await svc.get_my_enrollments(current_user.id)
+        return [CourseEnrollmentOut.model_validate(item).model_dump(mode="json") for item in enrollments]
+
+    return await app_cache.get_or_set(cache_key, load_enrollments, ttl_seconds=settings.APP_CACHE_SHORT_TTL_SECONDS)
 
 
 @router.get("/analytics", response_model=List[CourseAnalyticsOut])
@@ -125,8 +154,12 @@ async def course_analytics(
     db: AsyncSession = Depends(get_session),
     _: User = Depends(require_admin)
 ):
-    svc = CourseService(db)
-    return await svc.get_analytics()
+    async def load_analytics():
+        svc = CourseService(db)
+        analytics = await svc.get_analytics()
+        return [CourseAnalyticsOut.model_validate(item).model_dump(mode="json") for item in analytics]
+
+    return await app_cache.get_or_set("courses:analytics", load_analytics, ttl_seconds=settings.APP_CACHE_TTL_SECONDS)
 
 
 @router.get("/{course_id}", response_model=CourseOut)
@@ -135,11 +168,24 @@ async def get_course(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    svc = CourseService(db)
-    course = await svc.get_course(course_id)
+    cache_key = f"courses:detail:{course_id}"
+
+    async def load_course():
+        svc = CourseService(db)
+        course_obj = await svc.get_course(course_id)
+        return CourseOut.model_validate(course_obj).model_dump(mode="json") if course_obj else None
+
+    course = await app_cache.get(cache_key)
+    if _course_payload_has_missing_quizzes(course) or _course_payload_has_missing_videos(course):
+        course = None
+
+    if course is None:
+        course = await load_course()
+        await app_cache.set(cache_key, course, ttl_seconds=settings.APP_CACHE_TTL_SECONDS)
+
     if not course:
         raise HTTPException(404, "Course not found")
-    if current_user.role != UserRole.ADMIN and not course.is_published:
+    if current_user.role != UserRole.ADMIN and not course["is_published"]:
         raise HTTPException(404, "Course not found")
     return course
 
@@ -166,7 +212,9 @@ async def update_course(
         }
         _validate_course_publish_payload(effective_payload)
 
-    return await svc.update_course(course, patch_data)
+    updated = await svc.update_course(course, patch_data)
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
+    return updated
 
 
 @router.delete("/{course_id}", status_code=204)
@@ -180,6 +228,7 @@ async def delete_course(
     if not course:
         raise HTTPException(404, "Course not found")
     await svc.delete_course(course)
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
 
 
 # ── Modules (Admin) ──────────────────────────────────────────────────────────
@@ -192,7 +241,9 @@ async def add_module(
     _: User = Depends(require_admin)
 ):
     svc = CourseService(db)
-    return await svc.add_module(course_id, body.model_dump())
+    module = await svc.add_module(course_id, body.model_dump())
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
+    return module
 
 
 @router.put("/{course_id}/modules/{module_id}", response_model=CourseModuleOut)
@@ -207,7 +258,9 @@ async def update_module(
     module = await svc.get_module(module_id)
     if not module or module.course_id != course_id:
         raise HTTPException(404, "Module not found")
-    return await svc.update_module(module, body.model_dump(exclude_none=True))
+    updated = await svc.update_module(module, body.model_dump(exclude_none=True))
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
+    return updated
 
 
 @router.delete("/{course_id}/modules/{module_id}", status_code=204)
@@ -222,6 +275,7 @@ async def delete_module(
     if not module or module.course_id != course_id:
         raise HTTPException(404, "Module not found")
     await svc.delete_module(module)
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
 
 
 # ── Module Quiz (Admin) ───────────────────────────────────────────────────────
@@ -235,7 +289,9 @@ async def add_quiz_question(
     _: User = Depends(require_admin)
 ):
     svc = CourseService(db)
-    return await svc.add_quiz_question(module_id, body.model_dump())
+    quiz = await svc.add_quiz_question(module_id, body.model_dump())
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
+    return quiz
 
 
 @router.post(
@@ -295,6 +351,7 @@ async def generate_module_quiz_questions(
         )
         generated += 1
 
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
     return {"generated_count": generated}
 
 
@@ -306,6 +363,7 @@ async def delete_quiz_question(
 ):
     svc = CourseService(db)
     await svc.delete_quiz_question(quiz_id)
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
 
 
 @router.put("/{course_id}/modules/{module_id}/quiz/{quiz_id}", response_model=ModuleQuizOut)
@@ -324,7 +382,9 @@ async def update_quiz_question(
     quiz = await svc.get_quiz_question(quiz_id)
     if not quiz or quiz.module_id != module_id:
         raise HTTPException(404, "Quiz question not found")
-    return await svc.update_quiz_question(quiz, body.model_dump(exclude_none=True))
+    updated = await svc.update_quiz_question(quiz, body.model_dump(exclude_none=True))
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
+    return updated
 
 
 # ── Assessment Questions (Admin) ──────────────────────────────────────────────
@@ -337,7 +397,9 @@ async def add_assessment_question(
     _: User = Depends(require_admin)
 ):
     svc = CourseService(db)
-    return await svc.add_assessment_question(course_id, body.model_dump())
+    question = await svc.add_assessment_question(course_id, body.model_dump())
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
+    return question
 
 
 @router.get("/{course_id}/assessment-questions", response_model=List[AssessmentQuestionAdminOut])
@@ -406,6 +468,7 @@ async def generate_assessment_questions(
         )
         generated += 1
 
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
     return {"generated_count": generated}
 
 
@@ -417,6 +480,7 @@ async def delete_assessment_question(
 ):
     svc = CourseService(db)
     await svc.delete_assessment_question(question_id)
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
 
 
 @router.put("/{course_id}/assessment-questions/{question_id}", response_model=AssessmentQuestionAdminOut)
@@ -431,7 +495,9 @@ async def update_assessment_question(
     question = await svc.get_assessment_question(question_id)
     if not question or question.course_id != course_id:
         raise HTTPException(404, "Assessment question not found")
-    return await svc.update_assessment_question(question, body.model_dump(exclude_none=True))
+    updated = await svc.update_assessment_question(question, body.model_dump(exclude_none=True))
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
+    return updated
 
 
 # ── Enrollment (Faculty) ──────────────────────────────────────────────────────
@@ -446,7 +512,9 @@ async def enroll_in_course(
     existing = await svc.get_enrollment(current_user.id, course_id)
     if existing:
         raise HTTPException(400, "Already enrolled")
-    return await svc.enroll(current_user.id, course_id)
+    enrollment = await svc.enroll(current_user.id, course_id)
+    await app_cache.invalidate_prefixes("courses:", "analytics:")
+    return enrollment
 
 
 @router.get("/{course_id}/progress", response_model=CourseProgressOut)
@@ -455,11 +523,20 @@ async def get_progress(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    svc = CourseService(db)
-    course = await svc.get_course(course_id)
-    if not course:
+    cache_key = f"courses:progress:{current_user.id}:{course_id}"
+
+    async def load_progress():
+        svc = CourseService(db)
+        course = await svc.get_course(course_id)
+        if not course:
+            return None
+        progress = await svc.get_course_progress(current_user.id, course_id)
+        return CourseProgressOut.model_validate(progress).model_dump(mode="json")
+
+    progress = await app_cache.get_or_set(cache_key, load_progress, ttl_seconds=settings.APP_CACHE_SHORT_TTL_SECONDS)
+    if not progress:
         raise HTTPException(404, "Course not found")
-    return await svc.get_course_progress(current_user.id, course_id)
+    return progress
 
 
 # ── Lesson Progress (Faculty) ─────────────────────────────────────────────────
@@ -472,9 +549,11 @@ async def update_lesson_progress(
     current_user: User = Depends(get_current_user)
 ):
     svc = CourseService(db)
-    return await svc.upsert_lesson_progress(
+    progress = await svc.upsert_lesson_progress(
         current_user.id, module_id, body.watched_seconds, body.completed
     )
+    await app_cache.invalidate_prefixes("courses:progress:", "courses:detail:")
+    return progress
 
 
 @router.post("/progress/{module_id}/quiz", response_model=LessonProgressOut)
@@ -485,7 +564,9 @@ async def submit_mini_quiz(
     current_user: User = Depends(get_current_user)
 ):
     svc = CourseService(db)
-    return await svc.submit_quiz(current_user.id, module_id, body.answers)
+    progress = await svc.submit_quiz(current_user.id, module_id, body.answers)
+    await app_cache.invalidate_prefixes("courses:progress:", "courses:detail:")
+    return progress
 
 
 # ── Final Assessment (Faculty) ────────────────────────────────────────────────
@@ -550,6 +631,7 @@ async def submit_assessment(
             attempt.id,
             e,
         )
+    await app_cache.invalidate_prefixes("courses:progress:", "courses:enrollments:", "courses:analytics")
     return attempt
 
 

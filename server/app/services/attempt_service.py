@@ -19,6 +19,7 @@ from app.models.question_pack import QuestionPack
 from app.models.question import Question
 from app.schemas.attempt import AttemptCreate, AttemptAnswerBase
 from app.services.llm_service import LLMService
+from app.services.test_service import TestService
 
 class AttemptService:
     def __init__(self, db: AsyncSession):
@@ -28,12 +29,14 @@ class AttemptService:
     async def start_attempt(self, faculty_id: str, test_id: str) -> Attempt:
         """Create a new in-progress attempt for a faculty member."""
         # Validate test exists first — crashes with AttributeError if skipped
-        result = await self.db.execute(select(Test).where(Test.id == test_id))
-        test = result.scalar_one_or_none()
+        test = await TestService(self.db).get_test(test_id)
         
         if not test:
             logger.error(f"start_attempt: test_id='{test_id}' not found in DB")
             raise ValueError(f"Test '{test_id}' does not exist")
+        if not getattr(test, "questions", []):
+            logger.error(f"start_attempt: test_id='{test_id}' has no linked questions")
+            raise ValueError(f"Test '{test.title}' has no available questions yet")
         
         try:
             attempt = Attempt(

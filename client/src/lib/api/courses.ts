@@ -50,6 +50,7 @@ export interface CourseEnrollment {
     enrolled_at: string;
     completed_at?: string;
     certificate_issued: boolean;
+    course?: Course;
 }
 
 export interface LessonProgress {

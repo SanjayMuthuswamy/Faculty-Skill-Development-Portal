@@ -13,6 +13,24 @@ from app.models.course_attempt import CourseAttempt
 from app.models.course_assessment import CourseAssessmentQuestion
 from app.models.module_quiz import ModuleQuiz
 
+MODULE_VIDEO_FALLBACKS: Dict[str, str] = {
+    "Reading Academic Dashboards": "https://www.youtube.com/watch?v=hSPmj7mK6ng",
+    "Turning Insights into Teaching Actions": "https://www.youtube.com/watch?v=R2hb_BT-MxM",
+    "Prompting for Teaching Tasks": "https://www.youtube.com/watch?v=2ePf9rue1Ao",
+    "Responsible AI Review": "https://www.youtube.com/watch?v=aR5N2Jl8k14",
+}
+
+COURSE_VIDEO_FALLBACKS: Dict[str, str] = {
+    "Modern Data Literacy for Faculty": "https://www.youtube.com/watch?v=hSPmj7mK6ng",
+    "Applied AI Workflows for Classroom Support": "https://www.youtube.com/watch?v=hfIUstzHs9A",
+    "Artificial Intelligence for Educators": "https://www.youtube.com/watch?v=2ePf9rue1Ao",
+    "Python Programming for Academic Research": "https://www.youtube.com/watch?v=_uQrJ0TkZlc",
+    "Cloud Computing Fundamentals": "https://www.youtube.com/watch?v=M988_fsOSWo",
+    "Effective Research Methodology": "https://www.youtube.com/watch?v=b3VgC2WlNUQ",
+    "Modern Teaching Strategies for Higher Education": "https://www.youtube.com/watch?v=R2hb_BT-MxM",
+    "Data Science for Academic Decision Making": "https://www.youtube.com/watch?v=hSPmj7mK6ng",
+}
+
 
 class CourseService:
 
@@ -75,6 +93,41 @@ class CourseService:
         for payload in self._build_default_quiz_payloads(module):
             self.db.add(ModuleQuiz(module_id=module.id, **payload))
 
+    def _build_default_video_url(self, course: Course, module: CourseModule) -> str:
+        if module.title in MODULE_VIDEO_FALLBACKS:
+            return MODULE_VIDEO_FALLBACKS[module.title]
+        if course.title in COURSE_VIDEO_FALLBACKS:
+            return COURSE_VIDEO_FALLBACKS[course.title]
+
+        title_text = f"{course.title} {module.title}".lower()
+        if any(term in title_text for term in ["ai", "prompt"]):
+            return "https://www.youtube.com/watch?v=2ePf9rue1Ao"
+        if any(term in title_text for term in ["cloud", "aws", "infrastructure"]):
+            return "https://www.youtube.com/watch?v=M988_fsOSWo"
+        if any(term in title_text for term in ["python", "pandas", "dashboards", "data"]):
+            return "https://www.youtube.com/watch?v=vmEHCJofslg"
+        if any(term in title_text for term in ["research", "literature", "methodology"]):
+            return "https://www.youtube.com/watch?v=b3VgC2WlNUQ"
+        if any(term in title_text for term in ["teaching", "classroom", "learning"]):
+            return "https://www.youtube.com/watch?v=R2hb_BT-MxM"
+        return "https://www.youtube.com/watch?v=hfIUstzHs9A"
+
+    def _needs_video_backfill(self, video_url: Optional[str]) -> bool:
+        normalized = (video_url or "").strip().lower()
+        return not normalized or "example.com" in normalized
+
+    async def _ensure_media_for_course_modules(self, course: Course) -> bool:
+        updated = False
+        for module in course.modules:
+            if self._needs_video_backfill(module.video_url):
+                module.video_url = self._build_default_video_url(course, module)
+                if not module.video_duration_seconds or module.video_duration_seconds <= 0:
+                    module.video_duration_seconds = 900
+                updated = True
+        if updated:
+            await self.db.commit()
+        return updated
+
     async def _ensure_quizzes_for_course_modules(self, modules: List[CourseModule]) -> bool:
         created = False
         for module in modules:
@@ -109,9 +162,10 @@ class CourseService:
         if not course:
             return None
 
+        media_updated = await self._ensure_media_for_course_modules(course)
         # Backfill missing module quizzes so all modules have quiz access.
-        created = await self._ensure_quizzes_for_course_modules(course.modules)
-        if not created:
+        quizzes_created = await self._ensure_quizzes_for_course_modules(course.modules)
+        if not (media_updated or quizzes_created):
             return course
 
         refreshed = await self.db.execute(
@@ -146,7 +200,15 @@ class CourseService:
     # ── Modules ───────────────────────────────────────────────────────────────
 
     async def add_module(self, course_id: str, data: dict) -> CourseModule:
+        course = await self.get_course(course_id)
+        if not course:
+            raise ValueError("Course not found")
+
         module = CourseModule(**data, course_id=course_id)
+        if self._needs_video_backfill(module.video_url):
+            module.video_url = self._build_default_video_url(course, module)
+        if not module.video_duration_seconds or module.video_duration_seconds <= 0:
+            module.video_duration_seconds = 900
         self.db.add(module)
         await self.db.flush()
         await self._create_default_quiz_for_module(module)
@@ -165,6 +227,13 @@ class CourseService:
         for k, v in data.items():
             if v is not None:
                 setattr(module, k, v)
+        if self._needs_video_backfill(module.video_url):
+            course_result = await self.db.execute(select(Course).where(Course.id == module.course_id))
+            course = course_result.scalar_one_or_none()
+            if course:
+                module.video_url = self._build_default_video_url(course, module)
+        if not module.video_duration_seconds or module.video_duration_seconds <= 0:
+            module.video_duration_seconds = 900
         await self.db.commit()
         await self.db.refresh(module)
         return module

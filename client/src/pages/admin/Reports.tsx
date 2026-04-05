@@ -3,9 +3,10 @@ import { analyticsApi } from '../../lib/api/analytics';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
-import { Download, TrendingUp, Sparkles, Target, Loader2 } from 'lucide-react';
+import { Download, TrendingUp, Sparkles, Target } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useMemo } from 'react';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 export default function AdminReports() {
     const { data: rawDeptStats, isLoading } = useQuery({
@@ -62,12 +63,7 @@ export default function AdminReports() {
     };
 
     if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center p-12 space-y-4">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                <p className="text-gray-500 font-medium">Loading skill analytics...</p>
-            </div>
-        );
+        return <LoadingState label="Loading analytics" />;
     }
 
     return (
