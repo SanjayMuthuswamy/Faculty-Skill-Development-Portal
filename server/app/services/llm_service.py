@@ -471,12 +471,86 @@ class LLMService:
             )
         return LearningRoadmapAI(weekly_plan=plan)
 
-    def _fallback_chat(self, user_message: str, performance_context: Dict[str, Any]) -> str:
+    def _coach_intent(self, user_message: str) -> str:
+        prompt = (user_message or "").lower()
+        if any(term in prompt for term in ["study plan", "plan", "schedule", "roadmap"]):
+            return "study_plan"
+        if any(term in prompt for term in ["what should i study", "study next", "next topic", "what next"]):
+            return "study_next"
+        if any(term in prompt for term in ["progress", "recent", "how am i doing", "performance"]):
+            return "progress"
+        if any(term in prompt for term in ["strong", "strength", "good at"]):
+            return "strength"
+        if any(term in prompt for term in ["weak", "weakness", "topics need attention", "attention"]):
+            return "weakness"
+        if any(term in prompt for term in ["improve", "score", "better", "increase"]):
+            return "improve"
+        return "general"
+
+    def _build_coach_context(self, performance_context: Dict[str, Any]) -> str:
         total_tests = performance_context.get("total_tests", 0)
         avg_accuracy = float(performance_context.get("avg_accuracy", 0) or 0)
         weak_topics = performance_context.get("weak_topics", []) or []
         strong_topics = performance_context.get("strong_topics", []) or []
-        prompt = (user_message or "").lower()
+        recent_tests = performance_context.get("recent_tests", []) or []
+
+        if total_tests == 0:
+            return "The faculty member has not completed any tests yet."
+
+        weak_str = ", ".join(
+            f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in weak_topics[:4]
+        ) if weak_topics else "None"
+        strong_str = ", ".join(
+            f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in strong_topics[:4]
+        ) if strong_topics else "None"
+        recent_str = "; ".join(
+            f"{t['title']} in {t['domain']} scored {t['accuracy']:.0f}%"
+            for t in recent_tests[:4]
+        ) if recent_tests else "No recent tests"
+        return (
+            f"Total tests: {total_tests}\n"
+            f"Average accuracy: {avg_accuracy:.1f}%\n"
+            f"Weak topics: {weak_str}\n"
+            f"Strong topics: {strong_str}\n"
+            f"Recent activity: {recent_str}"
+        )
+
+    def _is_repetitive_coach_reply(
+        self,
+        reply: str,
+        conversation_history: List[Dict[str, str]],
+    ) -> bool:
+        normalized_reply = re.sub(r"\s+", " ", (reply or "").strip().lower())
+        if not normalized_reply:
+            return True
+
+        assistant_history = [
+            re.sub(r"\s+", " ", (message.get("content") or "").strip().lower())
+            for message in conversation_history
+            if message.get("role") == "assistant"
+        ]
+        if assistant_history and normalized_reply == assistant_history[-1]:
+            return True
+        return False
+
+    def _fallback_chat(
+        self,
+        user_message: str,
+        performance_context: Dict[str, Any],
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+    ) -> str:
+        total_tests = performance_context.get("total_tests", 0)
+        avg_accuracy = float(performance_context.get("avg_accuracy", 0) or 0)
+        weak_topics = performance_context.get("weak_topics", []) or []
+        strong_topics = performance_context.get("strong_topics", []) or []
+        recent_tests = performance_context.get("recent_tests", []) or []
+        intent = self._coach_intent(user_message)
+        last_user_turn = ""
+        if conversation_history:
+            for message in reversed(conversation_history):
+                if message.get("role") == "user":
+                    last_user_turn = message.get("content", "")
+                    break
 
         if total_tests == 0:
             return (
@@ -487,37 +561,74 @@ class LLMService:
             )
 
         weak_line = weak_topics[0]["topic"] if weak_topics else "no major weak topic recorded"
+        weak_pct = weak_topics[0]["avg_accuracy"] if weak_topics else avg_accuracy
         strong_line = strong_topics[0]["topic"] if strong_topics else "no strong topic recorded yet"
+        strong_pct = strong_topics[0]["avg_accuracy"] if strong_topics else avg_accuracy
+        recent_line = (
+            f"{recent_tests[0]['title']} at {recent_tests[0]['accuracy']:.0f}%"
+            if recent_tests else "no recent completed test"
+        )
 
-        if any(term in prompt for term in ["improve", "score", "better", "increase"]):
+        if intent == "improve":
             recommendation = "revise fundamentals and retake a focused test" if avg_accuracy < 70 else "move to timed practice and advanced topics"
             return (
                 f"To improve your score from {avg_accuracy:.1f}%:\n"
-                f"- Focus first on: {weak_line}\n"
-                "- Do 1 targeted practice set today and review each wrong answer.\n"
-                f"- Reattempt an official test after review.\n"
-                f"- Current strong area to retain: {strong_line}\n"
+                f"- Focus first on: {weak_line} ({weak_pct:.0f}%)\n"
+                "- Do one targeted practice set today and review each wrong answer.\n"
+                f"- Reattempt a related official test after review.\n"
+                f"- Current strong area to retain: {strong_line} ({strong_pct:.0f}%)\n"
                 f"- Next step: {recommendation}."
             )
 
-        if any(term in prompt for term in ["weak", "weakness", "where am i weak"]):
+        if intent == "weakness":
             return (
-                f"Your weakest area is: {weak_line}\n"
+                f"Your weakest area right now is {weak_line}.\n"
                 f"- Average accuracy: {avg_accuracy:.1f}%\n"
-                "- Spend 30-45 minutes reviewing this topic.\n"
+                f"- Topic accuracy: {weak_pct:.0f}%\n"
+                "- Spend 30 to 45 minutes reviewing this topic.\n"
                 "- Then take a short focused practice set to confirm improvement."
             )
 
-        if any(term in prompt for term in ["strong", "strength", "what am i good at"]):
+        if intent == "strength":
             return (
-                f"Your strongest area is: {strong_line}\n"
+                f"Your strongest area is {strong_line}.\n"
+                f"- Strong-topic accuracy: {strong_pct:.0f}%\n"
                 f"- Overall average: {avg_accuracy:.1f}%\n"
                 "- Keep this level by doing one revision test each week."
             )
 
+        if intent == "progress":
+            return (
+                f"Here is your current progress snapshot:\n"
+                f"- Overall average: {avg_accuracy:.1f}% across {total_tests} completed tests\n"
+                f"- Most recent result: {recent_line}\n"
+                f"- Strongest area: {strong_line}\n"
+                f"- Main focus area: {weak_line}"
+            )
+
+        if intent == "study_next":
+            secondary = weak_topics[1]["topic"] if len(weak_topics) > 1 else strong_line
+            return (
+                f"You should study {weak_line} next because it is your biggest performance gap.\n"
+                f"- Start with {weak_line}\n"
+                f"- Follow it with {secondary}\n"
+                "- End with one practice test to check retention."
+            )
+
+        if intent == "study_plan":
+            follow_up = f" You previously asked: {last_user_turn}." if last_user_turn else ""
+            return (
+                f"Here is a short study plan for your current performance profile.{follow_up}\n"
+                f"- Day 1: Review {weak_line} and summarize the key mistakes.\n"
+                f"- Day 2: Practice questions on {weak_line} and one supporting topic.\n"
+                f"- Day 3: Revisit {strong_line} briefly, then take a timed test.\n"
+                "- Track every incorrect answer and rewrite the correct reasoning."
+            )
+
         recommendation = "revise fundamentals and retake a focused test" if avg_accuracy < 70 else "move to timed practice and advanced topics"
         return (
-            f"Based on your current performance ({avg_accuracy:.1f}% average across {total_tests} tests):\n"
+            f"For your question about \"{user_message.strip()}\", here is the most useful summary from your current performance:\n"
+            f"- Overall average: {avg_accuracy:.1f}% across {total_tests} tests\n"
             f"- Strongest area: {strong_line}\n"
             f"- Main area to improve: {weak_line}\n"
             f"- Next step: {recommendation}\n"
@@ -676,35 +787,38 @@ Weekly Hours: {weekly_hours}
         performance_context: Dict[str, Any],
     ) -> Optional[str]:
         if not self._remote_enabled():
-            return self._fallback_chat(user_message, performance_context)
+            return self._fallback_chat(user_message, performance_context, conversation_history)
 
-        total_tests = performance_context.get("total_tests", 0)
-        avg_accuracy = performance_context.get("avg_accuracy", 0)
-        weak_topics = performance_context.get("weak_topics", [])
-        strong_topics = performance_context.get("strong_topics", [])
-        recent_tests = performance_context.get("recent_tests", [])
-        if total_tests == 0:
-            context_block = "The faculty member has not completed any tests yet."
-        else:
-            weak_str = ", ".join(f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in weak_topics) if weak_topics else "None"
-            strong_str = ", ".join(f"{t['topic']} ({t['avg_accuracy']:.0f}%)" for t in strong_topics) if strong_topics else "None"
-            recent_str = "; ".join(f"{t['title']} scored {t['accuracy']:.0f}%" for t in recent_tests[:3]) if recent_tests else "No recent tests"
-            context_block = (
-                f"Total tests: {total_tests}\n"
-                f"Average accuracy: {avg_accuracy:.1f}%\n"
-                f"Weak topics: {weak_str}\n"
-                f"Strong topics: {strong_str}\n"
-                f"Recent activity: {recent_str}"
-            )
+        context_block = self._build_coach_context(performance_context)
+        system_prompt = (
+            "You are an AI learning coach for faculty development.\n"
+            "Answer the user's exact question using the provided performance context and conversation history.\n"
+            "Do not repeat canned phrasing from prior turns.\n"
+            "Be concrete, dynamic, and helpful.\n"
+            "If the user asks what to study, name specific weak topics.\n"
+            "If the user asks about progress, summarize recent results.\n"
+            "If there is not enough data, say so plainly and suggest one next step.\n"
+            "Keep the answer concise, specific, and professional.\n\n"
+            f"Performance context:\n{context_block}"
+        )
 
-        messages = [{"role": "system", "content": context_block}]
-        messages.extend(conversation_history[-8:])
+        history_messages = [
+            {
+                "role": "assistant" if message.get("role") == "assistant" else "user",
+                "content": message.get("content", ""),
+            }
+            for message in conversation_history[-8:]
+            if message.get("content")
+        ]
+
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(history_messages)
         messages.append({"role": "user", "content": user_message})
         payload = {
             "model": self.model,
             "messages": messages,
-            "temperature": 0.4,
-            "max_tokens": 280,
+            "temperature": 0.7,
+            "max_tokens": 320,
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -720,13 +834,16 @@ Weekly Hours: {weekly_hours}
                     response.raise_for_status()
                     data = response.json()
                     if data.get("choices"):
-                        return data["choices"][0]["message"]["content"]
-                    return self._fallback_chat(user_message, performance_context)
+                        reply = data["choices"][0]["message"]["content"]
+                        if self._is_repetitive_coach_reply(reply, conversation_history):
+                            return self._fallback_chat(user_message, performance_context, conversation_history)
+                        return reply
+                    return self._fallback_chat(user_message, performance_context, conversation_history)
                 except Exception as exc:
                     logger.warning("Chat coach attempt %s failed: %s", attempt + 1, exc)
                     if attempt == self.max_retries:
-                        return self._fallback_chat(user_message, performance_context)
-        return self._fallback_chat(user_message, performance_context)
+                        return self._fallback_chat(user_message, performance_context, conversation_history)
+        return self._fallback_chat(user_message, performance_context, conversation_history)
 
     async def generate_course_feedback(self, wrong_questions: list, course_title: str) -> Optional[dict]:
         if not self._remote_enabled():

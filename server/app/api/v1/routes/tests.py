@@ -50,7 +50,10 @@ async def create_test(
     _validate_publish_test_payload(payload)
 
     service = TestService(db)
-    test = await service.create_test(TestCreate(**payload), current_user.id)
+    try:
+        test = await service.create_test(TestCreate(**payload), current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     # Re-fetch with questions loaded via selectinload
     return await service.get_test(test.id) or test
 
@@ -69,7 +72,10 @@ async def create_tests_bulk(
     for test_in in payload.tests:
         test_payload = test_in.model_dump()
         _validate_publish_test_payload(test_payload)
-        created_test = await service.create_test(TestCreate(**test_payload), current_user.id)
+        try:
+            created_test = await service.create_test(TestCreate(**test_payload), current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         hydrated = await service.get_test(created_test.id)
         if hydrated:
             created.append(hydrated)
@@ -113,7 +119,10 @@ async def update_test(
             }
         )
 
-    updated = await service.update_test(test_id, patch_data)
+    try:
+        updated = await service.update_test(test_id, patch_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     if not updated:
         raise HTTPException(status_code=404, detail="Test not found")
     return updated

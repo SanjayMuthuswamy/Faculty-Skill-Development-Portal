@@ -30,7 +30,7 @@ COURSES_DATA = [
         "duration_hours": 8.0,
         "skill_level": "beginner",
         "tags": ["AI", "Teaching", "Technology"],
-        "thumbnail_url": None,
+        "thumbnail_url": "https://images.unsplash.com/photo-1677691820099-a6e8040aa077?auto=format&fit=crop&w=1400&q=80",
         "is_published": True,
         "modules": [
             {
@@ -116,7 +116,7 @@ COURSES_DATA = [
         "duration_hours": 12.0,
         "skill_level": "beginner",
         "tags": ["Python", "Research", "Data Science"],
-        "thumbnail_url": None,
+        "thumbnail_url": "https://images.unsplash.com/photo-1753545975907-dcb51efdd0d5?auto=format&fit=crop&w=1400&q=80",
         "is_published": True,
         "modules": [
             {
@@ -182,7 +182,7 @@ COURSES_DATA = [
         "duration_hours": 6.0,
         "skill_level": "intermediate",
         "tags": ["Cloud", "Technology", "Infrastructure"],
-        "thumbnail_url": None,
+        "thumbnail_url": "https://images.unsplash.com/photo-1717501219263-1c7f7d4cb97d?auto=format&fit=crop&w=1400&q=80",
         "is_published": True,
         "modules": [
             {
@@ -241,7 +241,7 @@ COURSES_DATA = [
         "duration_hours": 10.0,
         "skill_level": "intermediate",
         "tags": ["Research", "Methodology", "Academic Writing"],
-        "thumbnail_url": None,
+        "thumbnail_url": "https://images.unsplash.com/photo-1764096535068-0e9f652e03f6?auto=format&fit=crop&w=1400&q=80",
         "is_published": True,
         "modules": [
             {
@@ -295,7 +295,7 @@ COURSES_DATA = [
         "duration_hours": 7.0,
         "skill_level": "beginner",
         "tags": ["Teaching", "Pedagogy", "Higher Education"],
-        "thumbnail_url": None,
+        "thumbnail_url": "https://images.unsplash.com/photo-1649920442906-3c8ef428fb6e?auto=format&fit=crop&w=1400&q=80",
         "is_published": True,
         "modules": [
             {
@@ -349,7 +349,7 @@ COURSES_DATA = [
         "duration_hours": 15.0,
         "skill_level": "advanced",
         "tags": ["Data Science", "Analytics", "AI", "Research"],
-        "thumbnail_url": None,
+        "thumbnail_url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
         "is_published": True,
         "modules": [
             {

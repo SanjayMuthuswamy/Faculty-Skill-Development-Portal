@@ -8,6 +8,7 @@ import { Card } from '../../components/ui/Card';
 import { Loader2, ArrowRight, ArrowLeft, CheckCircle, Sparkles, AlertCircle } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
 import { cn } from '../../lib/utils';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 export default function PracticePlayer() {
     const { setId } = useParams<{ setId: string }>();
@@ -45,11 +46,8 @@ export default function PracticePlayer() {
 
     if (isLoading) {
         return (
-            <div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center">
-                <div className="text-center">
-                    <Loader2 className="h-10 w-10 animate-spin text-indigo-600 mx-auto mb-4" />
-                    <p className="text-slate-500 font-medium">Preparing AI practice session...</p>
-                </div>
+            <div className="fixed inset-0 z-[9999] bg-white">
+                <LoadingState label="Preparing practice session" fullScreen />
             </div>
         );
     }

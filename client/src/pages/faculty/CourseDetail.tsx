@@ -4,9 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CourseModule, coursesApi } from '../../lib/api/courses';
 import {
     ChevronDown, ChevronRight, Play, FileText,
-    AlertCircle, Loader2, Award, ExternalLink, Users, Clock, Lock, CheckCircle2
+    AlertCircle, Award, ExternalLink, Users, Clock, Lock, CheckCircle2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { LoadingState } from '../../components/ui/LoadingState';
+import { getCourseModuleVideoUrl } from '../../lib/utils/courseVideos';
 
 function VideoPlayer({ url }: { url: string }) {
     const embedUrl = url.includes('youtube.com/watch')
@@ -52,11 +54,7 @@ export default function CourseDetailPage() {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['course-progress', id] }),
     });
 
-    if (courseLoading) return (
-        <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
-    );
+    if (courseLoading) return <LoadingState label="Loading course" compact />;
 
     if (!course) return (
         <div className="flex items-center justify-center h-64 text-slate-400">
@@ -144,6 +142,11 @@ export default function CourseDetailPage() {
                         const unlocked = isModuleUnlocked(idx);
                         const cleared = isModuleCleared(mod);
                         const moduleProgress = progressByModule.get(mod.id);
+                        const videoUrl = getCourseModuleVideoUrl({
+                            courseTitle: course.title,
+                            moduleTitle: mod.title,
+                            videoUrl: mod.video_url,
+                        });
 
                         return (
                             <div key={mod.id} className={cn(
@@ -167,7 +170,7 @@ export default function CourseDetailPage() {
                                     <div className="flex-1 min-w-0">
                                         <p className={cn("font-bold text-sm transition-colors", isOpen ? "text-blue-600" : "text-slate-800")}>{mod.title}</p>
                                         <div className="flex items-center gap-3 mt-1">
-                                            {mod.video_url && (
+                                            {videoUrl && (
                                                 <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-tight">
                                                     <Play className="h-3 w-3" /> Video
                                                 </span>
@@ -203,7 +206,7 @@ export default function CourseDetailPage() {
                                 {isOpen && unlocked && (
                                     <div className="px-6 pb-8 border-t border-slate-50 animate-in fade-in slide-in-from-top-2 duration-300">
                                         <div className="pt-6 space-y-6">
-                                            {mod.video_url ? (
+                                            {videoUrl ? (
                                                 <div className="space-y-4">
                                                     <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
                                                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Video Lesson</h4>
@@ -218,7 +221,7 @@ export default function CourseDetailPage() {
                                                             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> Mark as Watched
                                                         </button>
                                                     </div>
-                                                    <VideoPlayer url={mod.video_url} />
+                                                    <VideoPlayer url={videoUrl} />
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col items-center gap-3 text-slate-400 text-sm py-12 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">

@@ -169,12 +169,12 @@ export default function AdminPrograms() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Program Management</h1>
-                    <p className="text-gray-500">Create and manage training programs</p>
+                    <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Program Management</h1>
+                    <p className="max-w-xl text-gray-500">Create and manage training programs</p>
                 </div>
-                <Button onClick={handleCreate}>
+                <Button onClick={handleCreate} className="w-full sm:w-auto">
                     <Plus className="mr-2 h-4 w-4" /> Create Program
                 </Button>
             </div>
@@ -190,7 +190,7 @@ export default function AdminPrograms() {
                         }}
                     />
                     <select
-                        className="h-10 rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 md:w-56"
+                        className="h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 md:w-56"
                         value={statusFilter}
                         onChange={(e) => {
                             setStatusFilter(e.target.value as 'ALL' | ProgramStatus);
@@ -295,7 +295,7 @@ export default function AdminPrograms() {
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <Input
                             label="Start Date"
                             type="date"
@@ -310,7 +310,7 @@ export default function AdminPrograms() {
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-1">
                             <label className="text-sm font-medium text-gray-700">Domain</label>
                             <select className="w-full h-10 rounded-md border border-gray-300 px-3" {...register('domain')}>
@@ -365,9 +365,9 @@ export default function AdminPrograms() {
 
 
 
-                    <div className="flex justify-end gap-3 mt-6">
-                        <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                        <Button type="submit">{editingProgram ? "Update Program" : "Create Program"}</Button>
+                    <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                        <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="w-full sm:w-auto">Cancel</Button>
+                        <Button type="submit" className="w-full sm:w-auto">{editingProgram ? "Update Program" : "Create Program"}</Button>
                     </div>
                 </form>
             </Modal>

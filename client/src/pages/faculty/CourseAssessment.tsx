@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { coursesApi, AssessmentQuestion, CourseAttempt } from '../../lib/api/courses';
 import { Timer, CheckCircle, XCircle, Loader2, AlertCircle, Award, Brain } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 const TIME_LIMIT = 25 * 60; // 25 minutes in seconds
 
@@ -142,11 +143,7 @@ export default function CourseAssessmentPage() {
         return () => clearInterval(timer);
     }, [submitted, questions.length, submitMutation]);
 
-    if (isLoading) return (
-        <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
-    );
+    if (isLoading) return <LoadingState label="Loading assessment" compact />;
 
     if (questions.length === 0) return (
         <div className="flex flex-col items-center justify-center h-64 text-slate-400">

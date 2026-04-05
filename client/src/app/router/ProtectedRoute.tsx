@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../providers/AuthProvider';
 import { Role } from '../../lib/types';
-import { Loader2 } from 'lucide-react';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -14,11 +14,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const location = useLocation();
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
-    );
+    return <LoadingState label="Checking access" fullScreen />;
   }
 
   if (!user) {

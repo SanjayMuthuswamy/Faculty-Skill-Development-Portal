@@ -14,6 +14,18 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { Badge } from '../../components/ui/Badge';
 import { useMemo } from 'react';
 
+function formatDepartmentLabel(name: string) {
+    if (!name) return 'General';
+    if (name.length <= 12) return name;
+    const words = name.split(/\s+/).filter(Boolean);
+    if (words.length > 1) {
+        return words
+            .map((word, index) => index === words.length - 1 ? word.slice(0, 4) : word.slice(0, 3))
+            .join(' ');
+    }
+    return `${name.slice(0, 10)}...`;
+}
+
 export default function AdminDashboard() {
     const { data: departmentStats, isLoading: isLoadingDept } = useQuery({
         queryKey: ['admin-dept-summary'],
@@ -55,6 +67,11 @@ export default function AdminDashboard() {
             score: Math.round(d.avg_accuracy)
         }));
     }, [departmentStats]);
+
+    const readinessChartMinWidth = useMemo(
+        () => Math.max(520, chartData.length * 88),
+        [chartData.length]
+    );
 
     const skillStatusData = useMemo(() => {
         if (!departmentStats) return [
@@ -135,26 +152,31 @@ export default function AdminDashboard() {
                 {/* Main Charts */}
                 <div className="lg:col-span-5 space-y-6">
                     <Card className="border-none shadow-xl bg-white overflow-hidden">
-                        <CardHeader className="border-b border-gray-50 p-6">
-                            <div className="flex items-center gap-2">
-                                <BarChart3 className="h-5 w-5 text-primary" />
-                                <div>
+                        <CardHeader className="border-b border-gray-50 p-4 sm:p-6">
+                            <div className="flex items-start gap-2 sm:items-center">
+                                <BarChart3 className="mt-1 h-5 w-5 shrink-0 text-primary sm:mt-0" />
+                                <div className="min-w-0">
                                     <CardTitle className="text-lg font-black">Departmental Readiness Gap</CardTitle>
                                     <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Target goal attainment scores by department</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent>
-                            <div className="h-[350px] w-full p-4">
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto px-2 pb-4 sm:px-4">
+                                <div className="h-[320px] w-full sm:h-[350px]" style={{ minWidth: readinessChartMinWidth }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                                    <BarChart data={chartData} margin={{ top: 20, right: 16, left: 0, bottom: 44 }}>
                                         <XAxis
                                             dataKey="name"
                                             fontSize={10}
                                             interval={0}
-                                            tickMargin={10}
+                                            tickMargin={14}
+                                            angle={-28}
+                                            textAnchor="end"
+                                            height={72}
                                             tickLine={false}
                                             axisLine={false}
+                                            tickFormatter={formatDepartmentLabel}
                                             tick={{ fill: '#94a3b8', fontWeight: 800 }}
                                         />
                                         <YAxis
@@ -193,13 +215,14 @@ export default function AdminDashboard() {
                                                 return null;
                                             }}
                                         />
-                                        <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={40}>
+                                        <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={28}>
                                             {chartData.map((_, index) => (
                                                 <Cell key={`cell-${index}`} fill={['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'][index % 6]} />
                                             ))}
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -208,9 +231,9 @@ export default function AdminDashboard() {
                 {/* Sidebar Analytics - Only Skill Verification Left */}
                 <div className="lg:col-span-2 space-y-6">
                     <Card className="border-none shadow-xl bg-white overflow-hidden">
-                        <CardHeader className="pb-2 border-b border-gray-50 p-6">
-                            <div className="flex items-center gap-2">
-                                <PieIcon className="h-5 w-5 text-indigo-500" />
+                        <CardHeader className="border-b border-gray-50 p-4 pb-2 sm:p-6">
+                            <div className="flex items-start gap-2 sm:items-center">
+                                <PieIcon className="mt-1 h-5 w-5 shrink-0 text-indigo-500 sm:mt-0" />
                                 <CardTitle className="text-lg font-black">Verification Matrix</CardTitle>
                             </div>
                         </CardHeader>

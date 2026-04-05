@@ -166,12 +166,14 @@ export default function FacultyTests() {
                             const latestAttempt = completion?.latestAttempt;
 
                             return (
-                            <Card key={test.id} className="flex flex-col border-none shadow-sm hover:shadow-md transition-all duration-300 group overflow-hidden">
+                            <Card key={test.id} className="group flex flex-col overflow-hidden border-none shadow-sm transition-all duration-300 hover:shadow-md">
                                 <div className="h-1.5 w-full bg-blue-600" />
                                 <CardHeader className="pb-4">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">{test.domain}</Badge>
-                                        <div className="flex items-center gap-2">
+                                    <div className="mb-3 flex flex-wrap items-start gap-2">
+                                        <Badge variant="outline" className="max-w-full border-slate-200 bg-slate-50 text-slate-600">
+                                            {test.domain}
+                                        </Badge>
+                                        <div className="flex flex-wrap items-center gap-2">
                                             <Badge
                                                 className={cn(
                                                     "capitalize",
@@ -187,8 +189,12 @@ export default function FacultyTests() {
                                             )}
                                         </div>
                                     </div>
-                                    <CardTitle className="text-xl leading-tight text-slate-900">{test.title}</CardTitle>
-                                    <CardDescription className="line-clamp-2 min-h-[40px] mt-1 text-slate-500">{test.short_description || test.description}</CardDescription>
+                                    <CardTitle className="break-words pr-1 text-xl leading-tight text-slate-900">
+                                        {test.title}
+                                    </CardTitle>
+                                    <CardDescription className="mt-1 min-h-[40px] line-clamp-2 break-words text-slate-500">
+                                        {test.short_description || test.description}
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent className="flex-1 pb-6">
                                     <div className="flex items-center gap-5 text-sm text-slate-500 font-medium">

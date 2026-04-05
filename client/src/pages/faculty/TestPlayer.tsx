@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button';
 import { Loader2, ArrowRight, ArrowLeft, CheckCircle, Clock } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
 import { cn } from '../../lib/utils';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 export default function TestPlayer() {
     const { id } = useParams<{ id: string }>();
@@ -109,11 +110,8 @@ export default function TestPlayer() {
 
     if (isLoadingTest) {
         return (
-            <div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center">
-                <div className="text-center">
-                    <Loader2 className="h-10 w-10 animate-spin text-blue-600 mx-auto mb-4" />
-                    <p className="text-slate-500 font-medium">Setting up your exam environment...</p>
-                </div>
+            <div className="fixed inset-0 z-[9999] bg-white">
+                <LoadingState label="Setting up your exam" fullScreen />
             </div>
         );
     }

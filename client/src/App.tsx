@@ -3,7 +3,7 @@ import { lazy, Suspense } from 'react';
 import { useAuth } from './app/providers/AuthProvider';
 import { ProtectedRoute } from './app/router/ProtectedRoute';
 import { DashboardLayout } from './components/layout/DashboardLayout';
-import { Loader2 } from 'lucide-react';
+import { LoadingState } from './components/ui/LoadingState';
 
 const Login = lazy(() => import('./pages/Login'));
 const Landing = lazy(() => import('./pages/Landing'));
@@ -34,6 +34,7 @@ const PackDetail = lazy(() => import('./pages/admin/PackDetail'));
 const AdminTestBuilder = lazy(() => import('./pages/admin/TestBuilder'));
 const AdminReports = lazy(() => import('./pages/admin/Reports'));
 const FacultyPerformance = lazy(() => import('./pages/admin/FacultyPerformance'));
+const FacultyAccountsPage = lazy(() => import('./pages/admin/FacultyAccounts'));
 const AIQuestionGen = lazy(() => import('./pages/admin/AIQuestionGen'));
 const DraftReview = lazy(() => import('./pages/admin/DraftReview'));
 const CourseManagerPage = lazy(() => import('./pages/admin/CourseManager'));
@@ -41,11 +42,7 @@ const CourseAnalyticsPage = lazy(() => import('./pages/admin/CourseAnalytics'));
 const QueryManagerPage = lazy(() => import('./pages/admin/QueryManager'));
 
 function RouteLoader() {
-  return (
-    <div className="flex min-h-[40vh] items-center justify-center">
-      <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
-    </div>
-  );
+  return <LoadingState label="Loading page" compact className="min-h-[40vh]" />;
 }
 
 function AppRoutes() {
@@ -97,6 +94,7 @@ function AppRoutes() {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="programs" element={<AdminPrograms />} />
           <Route path="reports" element={<AdminReports />} />
+          <Route path="faculty-accounts" element={<FacultyAccountsPage />} />
           <Route path="faculty" element={<FacultyPerformance />} />
           <Route path="faculty/:facultyId" element={<FacultyPerformance />} />
           <Route path="question-packs" element={<AdminQuestionPacks />} />

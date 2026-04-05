@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { coursesApi, Course, CourseModule, ModuleQuiz, AdminAssessmentQuestion } from '../../lib/api/courses';
 import { Plus, Trash2, ChevronDown, ChevronRight, Edit2, Eye, EyeOff, Loader2, X, Save } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useToast } from '../../components/ui/Toast';
 import { getApiErrorMessage } from '../../lib/api/error';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 type ModalMode = 'course' | 'module' | 'quiz' | 'assessment' | null;
 
@@ -52,7 +53,7 @@ export default function CourseManagerPage() {
     const [showBulkCourseModal, setShowBulkCourseModal] = useState(false);
     const [bulkCourseTitles, setBulkCourseTitles] = useState('');
 
-    const { data: courses = [], isLoading } = useQuery({
+    const { data: courses = [], isLoading, isError, error } = useQuery({
         queryKey: ['admin-courses'],
         queryFn: () => coursesApi.listCourses(),
     });
@@ -73,7 +74,9 @@ export default function CourseManagerPage() {
             queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
             queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
             setModal({ mode: null });
+            addToast('Course saved successfully.', 'success');
         },
+        onError: (error) => addToast(getApiErrorMessage(error, 'Failed to save course.'), 'error'),
     });
 
     const createBulkCoursesMutation = useMutation({
@@ -93,12 +96,19 @@ export default function CourseManagerPage() {
             queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
             queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
             setModal({ mode: null });
+            addToast('Course updated successfully.', 'success');
         },
+        onError: (error) => addToast(getApiErrorMessage(error, 'Failed to update course.'), 'error'),
     });
 
     const deleteCourseMutation = useMutation({
         mutationFn: (id: string) => coursesApi.deleteCourse(id),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-courses'] }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            addToast('Course deleted.', 'success');
+        },
+        onError: (error) => addToast(getApiErrorMessage(error, 'Failed to delete course.'), 'error'),
     });
 
     const addModuleMutation = useMutation({
@@ -107,7 +117,9 @@ export default function CourseManagerPage() {
             queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
             queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
             setModal({ mode: null });
+            addToast('Module added successfully.', 'success');
         },
+        onError: (error) => addToast(getApiErrorMessage(error, 'Failed to add module.'), 'error'),
     });
 
     const deleteModuleMutation = useMutation({
@@ -115,7 +127,9 @@ export default function CourseManagerPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
             queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
+            addToast('Module deleted.', 'success');
         },
+        onError: (error) => addToast(getApiErrorMessage(error, 'Failed to delete module.'), 'error'),
     });
 
     const addQuizMutation = useMutation({
@@ -124,7 +138,9 @@ export default function CourseManagerPage() {
             queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
             queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
             setModal({ mode: null });
+            addToast('Quiz question added.', 'success');
         },
+        onError: (error) => addToast(getApiErrorMessage(error, 'Failed to add quiz question.'), 'error'),
     });
     const updateQuizMutation = useMutation({
         mutationFn: ({ courseId, moduleId, quizId, data }: any) => coursesApi.updateQuizQuestion(courseId, moduleId, quizId, data),
@@ -149,7 +165,9 @@ export default function CourseManagerPage() {
             queryClient.invalidateQueries({ queryKey: ['admin-course-details'] });
             queryClient.invalidateQueries({ queryKey: ['admin-assessment-questions'] });
             setModal({ mode: null });
+            addToast('Assessment question added.', 'success');
         },
+        onError: (error) => addToast(getApiErrorMessage(error, 'Failed to add assessment question.'), 'error'),
     });
     const updateAssessmentMutation = useMutation({
         mutationFn: ({ courseId, questionId, data }: any) => coursesApi.updateAssessmentQuestion(courseId, questionId, data),
@@ -214,25 +232,62 @@ export default function CourseManagerPage() {
     const buildCoursePayload = () => {
         const payload: Record<string, any> = {
             title: (form.title || '').trim(),
-            description: form.description || undefined,
-            short_description: form.short_description || undefined,
+            description: (form.description || '').trim() || undefined,
+            short_description: (form.short_description || '').trim() || undefined,
             prerequisites: (form.prerequisites || '').split('\n').map((v: string) => v.trim()).filter(Boolean),
             learning_outcomes: (form.learning_outcomes || '').split('\n').map((v: string) => v.trim()).filter(Boolean),
-            instructor_name: form.instructor_name || '',
+            instructor_name: (form.instructor_name || '').trim(),
             duration_hours: normalizeDuration(form.duration_hours),
             estimated_weeks: Number(form.estimated_weeks || 1),
             skill_level: form.skill_level || 'beginner',
             tags: normalizeTags(form.tags),
-            thumbnail_url: form.thumbnail_url || undefined,
+            thumbnail_url: (form.thumbnail_url || '').trim() || undefined,
             is_published: !!form.is_published,
         };
         if (payload.duration_hours === undefined) delete payload.duration_hours;
         return payload;
     };
 
+    const getCourseValidationErrors = (payload: Record<string, any>) => {
+        const errors: string[] = [];
+
+        if (!payload.title) {
+            errors.push('Title is required.');
+        }
+        if (!payload.estimated_weeks || payload.estimated_weeks < 1) {
+            errors.push('Estimated weeks must be at least 1.');
+        }
+
+        if (payload.is_published) {
+            if (!payload.description || payload.description.length < 30) {
+                errors.push('Published course needs a description of at least 30 characters.');
+            }
+            if (!payload.instructor_name) {
+                errors.push('Published course needs an instructor name.');
+            }
+            if (!payload.learning_outcomes?.length) {
+                errors.push('Published course needs at least one learning outcome.');
+            }
+        }
+
+        return errors;
+    };
+
+    const coursePayloadPreview = useMemo(() => buildCoursePayload(), [form]);
+    const courseValidationErrors = useMemo(
+        () => (modal.mode === 'course' ? getCourseValidationErrors(coursePayloadPreview) : []),
+        [modal.mode, coursePayloadPreview],
+    );
+    const canPublishFromForm = coursePayloadPreview.is_published && courseValidationErrors.length === 0;
+
     const handleSubmit = () => {
         if (modal.mode === 'course') {
-            const payload = buildCoursePayload();
+            const payload = coursePayloadPreview;
+            const validationErrors = getCourseValidationErrors(payload);
+            if (validationErrors.length > 0) {
+                addToast(validationErrors[0], 'error');
+                return;
+            }
             if (form.id) updateCourseMutation.mutate({ id: form.id, data: payload });
             else createCourseMutation.mutate(payload);
         } else if (modal.mode === 'module' && modal.courseId) {
@@ -294,6 +349,11 @@ export default function CourseManagerPage() {
         }
 
         const basePayload = buildCoursePayload();
+        const validationErrors = getCourseValidationErrors(basePayload);
+        if (validationErrors.length > 0) {
+            addToast(validationErrors[0], 'error');
+            return;
+        }
         const coursesPayload = titles.map((title) => ({
             ...basePayload,
             title,
@@ -353,25 +413,33 @@ export default function CourseManagerPage() {
         );
     };
 
-    if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>;
+    if (isLoading) return <LoadingState label="Loading courses" />;
+    if (isError) {
+        return (
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-6">
+                <h2 className="text-lg font-bold text-red-700">Could not load courses</h2>
+                <p className="mt-1 text-sm text-red-600">{getApiErrorMessage(error, 'The course manager failed to load.')}</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-5">
-            <div className="flex items-center justify-between">
-                <div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                     <h1 className="text-2xl font-bold text-slate-900">Course Manager</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Create and manage courses, modules, quizzes, and assessments.</p>
+                    <p className="text-slate-500 text-sm mt-0.5 max-w-xl">Create and manage courses, modules, quizzes, and assessments.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <button
                         onClick={() => openModal('course')}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 sm:w-auto"
                     >
                         <Plus className="h-4 w-4" /> New Course
                     </button>
                     <button
                         onClick={() => setShowBulkCourseModal(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-200 sm:w-auto"
                     >
                         <Plus className="h-4 w-4" /> Bulk Create
                     </button>
@@ -393,18 +461,19 @@ export default function CourseManagerPage() {
                     return (
                         <div key={course.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                             {/* Course Row */}
-                            <div className="flex items-center gap-3 px-5 py-4">
-                                <button onClick={() => setExpandedCourse(isOpen ? null : course.id)} className="flex-1 flex items-center gap-3 text-left">
+                            <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-5">
+                                <button onClick={() => setExpandedCourse(isOpen ? null : course.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                                     {isOpen ? <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />}
-                                    <div>
-                                        <p className="font-semibold text-slate-800 text-sm">{course.title}</p>
-                                        <p className="text-xs text-slate-400">{course.skill_level} · {course.instructor_name} · {course.module_count ?? 0} modules</p>
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-slate-800 text-sm break-words">{course.title}</p>
+                                        <p className="text-xs text-slate-400 break-words">{course.skill_level} - {course.instructor_name} - {course.module_count ?? 0} modules</p>
                                     </div>
                                 </button>
-                                <span className={cn("text-xs font-bold px-2.5 py-1 rounded-full", course.is_published ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500")}>
-                                    {course.is_published ? 'Published' : 'Draft'}
-                                </span>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                                    <span className={cn("text-xs font-bold px-2.5 py-1 rounded-full", course.is_published ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500")}>
+                                        {course.is_published ? 'Published' : 'Draft'}
+                                    </span>
+                                    <div className="flex items-center gap-1.5">
                                     <button
                                         onClick={() => openModal('course', {}, {
                                             ...course,
@@ -416,7 +485,26 @@ export default function CourseManagerPage() {
                                         title="Edit"
                                     ><Edit2 className="h-3.5 w-3.5" /></button>
                                     <button
-                                        onClick={() => updateCourseMutation.mutate({ id: course.id, data: { is_published: !course.is_published } })}
+                                        onClick={() => {
+                                            if (!course.is_published) {
+                                                const validationErrors = getCourseValidationErrors({
+                                                    ...course,
+                                                    is_published: true,
+                                                });
+                                                if (validationErrors.length > 0) {
+                                                    addToast(validationErrors[0], 'error');
+                                                    openModal('course', {}, {
+                                                        ...course,
+                                                        is_published: true,
+                                                        tags: (course.tags || []).join(', '),
+                                                        prerequisites: (course.prerequisites || []).join('\n'),
+                                                        learning_outcomes: (course.learning_outcomes || []).join('\n'),
+                                                    });
+                                                    return;
+                                                }
+                                            }
+                                            updateCourseMutation.mutate({ id: course.id, data: { is_published: !course.is_published } });
+                                        }}
                                         className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400"
                                         title={course.is_published ? 'Unpublish' : 'Publish'}
                                     >{course.is_published ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</button>
@@ -425,17 +513,18 @@ export default function CourseManagerPage() {
                                         className="p-1.5 hover:bg-red-50 rounded-lg transition-colors text-slate-400 hover:text-red-500"
                                         title="Delete"
                                     ><Trash2 className="h-3.5 w-3.5" /></button>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Modules Panel */}
                             {isOpen && (
-                                <div className="px-5 pb-5 border-t border-slate-100 pt-4 space-y-2">
-                                    <div className="flex items-center justify-between mb-2">
+                                <div className="px-4 pb-5 border-t border-slate-100 pt-4 space-y-2 sm:px-5">
+                                    <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Modules</p>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => openModal('assessment', { courseId: course.id })} className="text-xs px-3 py-1.5 bg-purple-100 text-purple-700 font-semibold rounded-lg hover:bg-purple-200 transition-colors">+ Assessment Q</button>
-                                            <button onClick={() => openModal('module', { courseId: course.id })} className="text-xs px-3 py-1.5 bg-blue-100 text-blue-700 font-semibold rounded-lg hover:bg-blue-200 transition-colors">+ Module</button>
+                                        <div className="grid grid-cols-1 gap-2 sm:flex">
+                                            <button onClick={() => openModal('assessment', { courseId: course.id })} className="rounded-lg bg-purple-100 px-3 py-2 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-200">+ Assessment Q</button>
+                                            <button onClick={() => openModal('module', { courseId: course.id })} className="rounded-lg bg-blue-100 px-3 py-2 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-200">+ Module</button>
                                         </div>
                                     </div>
                                     {showModuleLoader && (
@@ -444,14 +533,14 @@ export default function CourseManagerPage() {
                                         </div>
                                     )}
                                     {modules.map((mod: CourseModule) => (
-                                        <div key={mod.id} className="bg-slate-50 rounded-xl px-4 py-3 flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm font-semibold text-slate-700">{mod.title}</p>
+                                        <div key={mod.id} className="bg-slate-50 rounded-xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-slate-700 break-words">{mod.title}</p>
                                                 <p className="text-xs text-slate-400">{mod.quiz_questions?.length ?? 0} quiz questions</p>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => openModal('quiz', { courseId: course.id, moduleId: mod.id }, { ai_count: 5, ai_difficulty: 'medium' })} className="text-xs px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-lg font-medium hover:bg-indigo-200 transition-colors">AI Quiz</button>
-                                                <button onClick={() => openModal('quiz', { courseId: course.id, moduleId: mod.id })} className="text-xs px-2.5 py-1 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition-colors">+ Quiz Q</button>
+                                            <div className="flex flex-wrap gap-2">
+                                                <button onClick={() => openModal('quiz', { courseId: course.id, moduleId: mod.id }, { ai_count: 5, ai_difficulty: 'medium' })} className="rounded-lg bg-indigo-100 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-200">AI Quiz</button>
+                                                <button onClick={() => openModal('quiz', { courseId: course.id, moduleId: mod.id })} className="rounded-lg bg-green-100 px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-200">+ Quiz Q</button>
                                                 <button
                                                     onClick={() => { if (confirm('Delete module?')) deleteModuleMutation.mutate({ courseId: course.id, moduleId: mod.id }); }}
                                                     className="p-1 hover:bg-red-100 rounded text-slate-400 hover:text-red-500 transition-colors"
@@ -461,9 +550,9 @@ export default function CourseManagerPage() {
                                     ))}
                                     {modules.flatMap((mod: CourseModule) =>
                                         (mod.quiz_questions || []).map((quiz: ModuleQuiz) => (
-                                            <div key={quiz.id} className="bg-white rounded-lg border border-slate-200 px-3 py-2 ml-2">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <p className="text-xs text-slate-700">{quiz.question_text}</p>
+                                            <div key={quiz.id} className="bg-white rounded-lg border border-slate-200 px-3 py-2 ml-0 sm:ml-2">
+                                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                    <p className="text-xs text-slate-700 break-words min-w-0">{quiz.question_text}</p>
                                                     <div className="flex items-center gap-1.5">
                                                         <button
                                                             onClick={() => openQuizEditModal(course.id, mod.id, quiz)}
@@ -496,8 +585,8 @@ export default function CourseManagerPage() {
                                         )}
                                         {expandedAssessmentQuestions.map((question: AdminAssessmentQuestion) => (
                                             <div key={question.id} className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <p className="text-xs text-slate-700">{question.question_text}</p>
+                                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                    <p className="text-xs text-slate-700 break-words min-w-0">{question.question_text}</p>
                                                     <div className="flex items-center gap-1.5">
                                                         <button
                                                             onClick={() => openAssessmentEditModal(course.id, question)}
@@ -540,14 +629,14 @@ export default function CourseManagerPage() {
                             <FieldGroup label="Title"><input className={inputCls} value={form.title || ''} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Course title" /></FieldGroup>
                             <FieldGroup label="Description"><textarea className={inputCls} rows={3} value={form.description || ''} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Course description" /></FieldGroup>
                             <FieldGroup label="Short Description"><input className={inputCls} value={form.short_description || ''} onChange={e => setForm(p => ({ ...p, short_description: e.target.value }))} placeholder="Short summary for cards" /></FieldGroup>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <FieldGroup label="Instructor"><input className={inputCls} value={form.instructor_name || ''} onChange={e => setForm(p => ({ ...p, instructor_name: e.target.value }))} placeholder="Instructor name" /></FieldGroup>
                                 <FieldGroup label="Duration (hours)"><input type="number" className={inputCls} value={form.duration_hours ?? ''} onChange={e => setForm(p => ({ ...p, duration_hours: e.target.value }))} placeholder="1.5" /></FieldGroup>
                             </div>
                             <FieldGroup label="Estimated Weeks"><input type="number" className={inputCls} value={form.estimated_weeks ?? 1} onChange={e => setForm(p => ({ ...p, estimated_weeks: e.target.value }))} placeholder="1" /></FieldGroup>
                             <FieldGroup label="Prerequisites (one per line)"><textarea className={inputCls} rows={2} value={form.prerequisites || ''} onChange={e => setForm(p => ({ ...p, prerequisites: e.target.value }))} placeholder="Basic teaching experience" /></FieldGroup>
                             <FieldGroup label="Learning Outcomes (one per line)"><textarea className={inputCls} rows={3} value={form.learning_outcomes || ''} onChange={e => setForm(p => ({ ...p, learning_outcomes: e.target.value }))} placeholder="Apply active learning techniques" /></FieldGroup>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <FieldGroup label="Skill Level">
                                     <select className={inputCls} value={form.skill_level || 'beginner'} onChange={e => setForm(p => ({ ...p, skill_level: e.target.value }))}>
                                         <option value="beginner">Beginner</option>
@@ -562,6 +651,16 @@ export default function CourseManagerPage() {
                                 <input type="checkbox" checked={form.is_published || false} onChange={e => setForm(p => ({ ...p, is_published: e.target.checked }))} className="rounded" />
                                 Publish immediately
                             </label>
+                            {form.is_published && (
+                                <div className={cn(
+                                    'rounded-xl border p-3 text-sm',
+                                    canPublishFromForm ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'
+                                )}>
+                                    {canPublishFromForm
+                                        ? 'This course is ready to publish.'
+                                        : courseValidationErrors.join(' ')}
+                                </div>
+                            )}
                         </>)}
 
                         {modal.mode === 'module' && (<>
@@ -585,7 +684,7 @@ export default function CourseManagerPage() {
                                         placeholder="Example: scenario-based questions for beginner faculty"
                                     />
                                 </FieldGroup>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <FieldGroup label="Question Count">
                                         <input
                                             type="number"

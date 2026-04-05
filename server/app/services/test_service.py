@@ -36,6 +36,7 @@ class TestService:
         db_test.questions = questions
         db_test.pack_ids = [link.pack_id for link in db_test.pack_links]
         db_test.question_ids = [link.question_id for link in db_test.question_links]
+        db_test.total_questions = len(questions)
 
     async def _compute_total_questions(self, pack_ids: List[str], question_ids: List[str]) -> int:
         seen_ids = set(question_ids)
@@ -55,6 +56,8 @@ class TestService:
         pack_ids = list(dict.fromkeys(test_in.pack_ids))
         question_ids = list(dict.fromkeys(test_in.question_ids))
         total_q = await self._compute_total_questions(pack_ids, question_ids)
+        if test_in.is_published and total_q <= 0:
+            raise ValueError("Published test requires at least one valid linked question.")
 
         db_test = Test(
             id=str(uuid4()),
@@ -102,10 +105,8 @@ class TestService:
 
         result = await self.db.execute(query)
         db_tests = result.scalars().all()
-
         for db_test in db_tests:
             self._attach_serialized_fields(db_test)
-
         return db_tests
 
     async def get_test(self, test_id: str) -> Optional[Test]:
@@ -156,6 +157,8 @@ class TestService:
 
         if has_pack_ids or has_question_ids:
             db_test.total_questions = await self._compute_total_questions(pack_ids, question_ids)
+        if db_test.is_published and db_test.total_questions <= 0:
+            raise ValueError("Published test requires at least one valid linked question.")
 
         await self.db.commit()
         return await self.get_test(test_id)

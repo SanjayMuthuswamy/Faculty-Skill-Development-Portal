@@ -387,6 +387,7 @@ async def _ensure_courses(
             "duration_hours": 8.0,
             "skill_level": "beginner",
             "tags": ["analytics", "data literacy", "teaching"],
+            "thumbnail_url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=80",
             "modules": [
                 {
                     "title": "Reading Academic Dashboards",
@@ -413,6 +414,7 @@ async def _ensure_courses(
             "duration_hours": 10.0,
             "skill_level": "intermediate",
             "tags": ["ai", "productivity", "assessment"],
+            "thumbnail_url": "https://images.unsplash.com/photo-1677691824304-279660ceece3?auto=format&fit=crop&w=1400&q=80",
             "modules": [
                 {
                     "title": "Prompting for Teaching Tasks",
@@ -446,7 +448,7 @@ async def _ensure_courses(
                 duration_hours=spec["duration_hours"],
                 skill_level=spec["skill_level"],
                 tags=spec["tags"],
-                thumbnail_url=None,
+                thumbnail_url=spec.get("thumbnail_url"),
                 is_published=True,
                 created_by_id=admin.id,
             )

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queriesApi, FacultyQuery } from '../../lib/api/forum';
-import { Loader2, CheckCircle, Clock, AlertCircle, Filter, Search } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, Filter, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
 import { useToast } from '../../components/ui/Toast';
 import { Pagination } from '../../components/ui/Pagination';
 import { motion } from 'framer-motion';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 const STATUS_COLORS: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-700',
@@ -126,7 +127,7 @@ export default function QueryManagerPage() {
             </div>
 
             {isLoading ? (
-                <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-blue-500" /></div>
+                <LoadingState label="Loading queries" compact />
             ) : isError ? (
                 <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
                     Unable to load queries. Please refresh or try again shortly.

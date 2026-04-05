@@ -50,6 +50,8 @@ export interface FacultyProfile {
         id: string;
         name: string;
         email: string;
+        role: string;
+        is_active: boolean;
     };
     skills?: FacultySkill[];
     course_enrollments?: CourseEnrollment[];
@@ -59,6 +61,15 @@ export interface FacultyProfileUpdate {
     department?: string;
     designation?: string;
     experience_years?: number;
+}
+
+export interface FacultyAccountForm {
+    name: string;
+    email: string;
+    department: string;
+    designation: string;
+    experience_years: number;
+    is_active: boolean;
 }
 
 export interface PaginatedFacultyProfiles {
@@ -139,6 +150,27 @@ export const facultyApi = {
     registerFaculty: async (data: any): Promise<FacultyProfile> => {
         const response = await http.post<FacultyProfile>('/api/v1/faculty/register-faculty', data);
         return response.data;
+    },
+
+    createFacultyAccount: async (data: FacultyAccountForm & { password: string }): Promise<FacultyProfile> => {
+        const response = await http.post<FacultyProfile>('/api/v1/faculty/accounts', data);
+        return response.data;
+    },
+
+    updateFacultyAccount: async (facultyId: string, data: FacultyAccountForm): Promise<FacultyProfile> => {
+        const response = await http.put<FacultyProfile>(`/api/v1/faculty/${facultyId}/account`, data);
+        return response.data;
+    },
+
+    resetFacultyPassword: async (facultyId: string, newPassword: string): Promise<FacultyProfile> => {
+        const response = await http.post<FacultyProfile>(`/api/v1/faculty/${facultyId}/account/reset-password`, {
+            new_password: newPassword,
+        });
+        return response.data;
+    },
+
+    deleteFacultyAccount: async (facultyId: string): Promise<void> => {
+        await http.delete(`/api/v1/faculty/${facultyId}/account`);
     },
 
     verifySkill: async (facultyId: string, skillId: string): Promise<{ status: string }> => {

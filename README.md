@@ -1,456 +1,285 @@
-# Faculty Skill Development Portal (FSDP)
+# Faculty Skill Development Portal
 
-A production-grade full-stack boilerplate for a Faculty Skill Development Portal with role-based access control (RBAC).
+Faculty Skill Development Portal (FSDP) is a full-stack platform for managing faculty learning, assessment, and performance workflows. It combines a FastAPI backend, a React + Vite frontend, PostgreSQL persistence, and role-based access for administrators and faculty users.
 
-## 📋 Features
+## What It Does
 
-- **Backend API**: FastAPI with SQLAlchemy 2.0 ORM
-- **Authentication**: JWT-based with access and refresh tokens
-- **Database**: PostgreSQL with Alembic migrations
-- **Authorization**: Role-based access control (ADMIN, FACULTY)
-- **Frontend**: React 18 with TypeScript, Vite, and Tailwind CSS
-- **Type Safety**: Pydantic v2 for backend, TypeScript for frontend
-- **Modern UI**: Responsive design with Tailwind CSS
-- **State Management**: TanStack Query for server state, React Context for auth
-- **Form Validation**: React Hook Form + Zod on frontend, Pydantic on backend
-- **Docker Support**: Docker Compose for local development
-## Production Deployment
+The current codebase supports both admin and faculty workflows, including:
 
-Production deployment documentation:
+- Faculty account registration and profile management
+- Skill tracking and verification
+- Program and enrollment management
+- Course publishing, enrollment, learning progress, quizzes, and assessments
+- Question banks, question packs, tests, and attempt tracking
+- AI-assisted question generation, coaching, roadmaps, and growth plans
+- Faculty analytics, reports, and department-level summaries
+- Discussion/forum-style interactions and faculty query handling
+- Personalized news preferences and news feed delivery
 
-- `docs/PRODUCTION_DEPLOYMENT.md`
-- `docs/VERCEL_RENDER_DEPLOY.md` (Vercel frontend + Render backend)
+## Tech Stack
 
-Run:
+### Frontend
 
-```bash
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+- React 18
+- TypeScript
+- Vite 5
+- Tailwind CSS
+- TanStack Query
+- React Hook Form + Zod
+- Axios
+- Framer Motion
+- Recharts
+- Sentry
+
+### Backend
+
+- FastAPI
+- SQLAlchemy 2
+- Alembic
+- PostgreSQL
+- Pydantic v2
+- JWT authentication
+- Passlib / bcrypt
+- Sentry
+
+## Repository Structure
+
+```text
+Faculty-Skill-Development-Portal/
+|-- client/                 # React frontend
+|   |-- src/
+|   |   |-- app/           # Providers and router
+|   |   |-- components/    # Shared UI and layout
+|   |   |-- lib/           # API clients and utilities
+|   |   `-- pages/         # Admin and faculty screens
+|-- server/                 # FastAPI backend
+|   |-- app/
+|   |   |-- api/v1/routes/ # REST endpoints
+|   |   |-- core/          # Config, security, monitoring, cache
+|   |   |-- db/            # DB setup
+|   |   |-- models/        # SQLAlchemy models
+|   |   |-- schemas/       # Pydantic schemas
+|   |   `-- services/      # Business logic
+|   |-- migrations/        # Alembic migrations
+|   |-- tests/             # Backend tests
+|   `-- seed_db.py         # Seed/demo data script
+|-- maintenance_scripts/    # Project maintenance helpers
+|-- docker-compose.yml      # Local Docker services
+`-- README.md
 ```
 
-## 🏗️ Project Structure
+## Main Application Areas
 
-```
-fsdp-portal/
-├── server/                          # Backend (FastAPI)
-│   ├── app/
-│   │   ├── api/v1/
-│   │   │   ├── routes/
-│   │   │   │   ├── auth.py         # Authentication endpoints
-│   │   │   │   └── health.py       # Health check endpoint
-│   │   │   ├── api.py              # API router aggregation
-│   │   │   └── deps.py             # Dependency injection
-│   │   ├── core/
-│   │   │   ├── config.py           # Configuration from env vars
-│   │   │   ├── security.py         # JWT and password utilities
-│   │   │   └── logging.py          # Structured logging
-│   │   ├── db/
-│   │   │   ├── base.py             # SQLAlchemy base
-│   │   │   ├── session.py          # Database session management
-│   │   │   └── init_db.py          # Database initialization & seeding
-│   │   ├── models/
-│   │   │   └── user.py             # User model with roles
-│   │   ├── schemas/
-│   │   │   ├── auth.py             # Auth request/response schemas
-│   │   │   └── user.py             # User schemas
-│   │   ├── services/
-│   │   │   └── auth_service.py     # Authentication business logic
-│   │   └── main.py                 # FastAPI app entry point
-│   ├── alembic/
-│   │   ├── versions/
-│   │   │   └── 001_initial.py      # Initial schema migration
-│   │   ├── env.py                  # Alembic configuration
-│   │   └── __init__.py
-│   ├── Dockerfile
-│   ├── pyproject.toml
-│   ├── requirements.txt
-│   ├── alembic.ini
-│   └── .env.example
-│
-├── client/                          # Frontend (React + TypeScript)
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── providers/
-│   │   │   │   ├── AuthProvider.tsx       # Auth context provider
-│   │   │   │   └── QueryProvider.tsx      # TanStack Query provider
-│   │   │   └── router/
-│   │   │       ├── AppRouter.tsx          # Main router setup
-│   │   │       ├── ProtectedRoute.tsx     # Protected route component
-│   │   │       └── routes.ts              # Route constants
-│   │   ├── components/
-│   │   │   ├── layout/
-│   │   │   │   ├── Sidebar.tsx            # Navigation sidebar
-│   │   │   │   ├── Topbar.tsx             # Top navigation bar
-│   │   │   │   └── PageShell.tsx          # Layout wrapper
-│   │   │   └── ui/
-│   │   │       ├── Button.tsx
-│   │   │       ├── Input.tsx
-│   │   │       ├── Card.tsx
-│   │   │       ├── Modal.tsx
-│   │   │       └── Toast.tsx
-│   │   ├── lib/
-│   │   │   ├── api/
-│   │   │   │   ├── http.ts                # Axios instance with interceptors
-│   │   │   │   └── auth.ts                # Auth API calls
-│   │   │   └── storage/
-│   │   │       └── storage.ts             # LocalStorage utilities
-│   │   ├── pages/
-│   │   │   ├── LoginPage.tsx
-│   │   │   ├── admin/
-│   │   │   │   └── AdminDashboard.tsx
-│   │   │   └── faculty/
-│   │   │       └── FacultyDashboard.tsx
-│   │   ├── styles/
-│   │   │   └── globals.css
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   ├── tsconfig.json
-│   ├── tsconfig.node.json
-│   ├── package.json
-│   └── .env.example
-│
-├── docker-compose.yml
-├── .gitignore
-└── README.md (this file)
-```
+### Admin UI
 
-## 🚀 Quick Start
+Key screens under `client/src/pages/admin/` include:
 
-### Prerequisites
+- Dashboard
+- Faculty list, details, performance, and account management
+- Programs
+- Course manager and course analytics
+- Question bank and question packs
+- Test builder
+- AI question generation and draft review
+- Query manager
+- Reports
 
-- Docker and Docker Compose installed
-- Node.js 18+ (for local frontend development)
-- Python 3.11+ (for local backend development)
+### Faculty UI
 
-### Setup with Docker Compose (Recommended)
+Key screens under `client/src/pages/faculty/` include:
 
-1. **Clone the repository**
-   ```bash
-   cd fsdp-portal
-   ```
+- Dashboard and profile
+- Programs and program details
+- Courses, course detail, module quiz, assessment, and certificate
+- Tests, practice, and result/player flows
+- AI coach and AI growth plan
+- Trends
+- Forum
 
-2. **Start all services**
-   ```bash
-   docker-compose up
-   ```
+### Backend APIs
 
-   This will:
-   - Start PostgreSQL database
-   - Initialize the database with seed data
-   - Start the FastAPI server at `http://localhost:8000`
+The backend currently exposes route groups for:
 
-3. **Access the application**
-   - Frontend: `http://localhost:5173`
-   - Backend API: `http://localhost:8000`
-   - API Documentation: `http://localhost:8000/docs`
+- `auth`
+- `users`
+- `faculty`
+- `skills`
+- `programs`
+- `enrollments`
+- `question-packs`
+- `tests`
+- `attempts`
+- `growth-plans`
+- `analytics`
+- `news`
+- `ai-questions`
+- `practice-sets`
+- `roadmaps`
+- `ai-coach`
+- `courses`
+- `discussions`
+- `queries`
+- `health`
 
-4. **Login with demo accounts**
-   - Admin: `admin@fsdp.com` / `123456`
-   - Faculty: `faculty@fsdp.com` / `123456`
+## Prerequisites
 
-### Local Setup (Development)
+- Node.js 18+
+- Python 3.11+
+- PostgreSQL 15+ for local non-Docker development
+- Docker Desktop or Docker Engine for containerized setup
 
-#### Backend Setup
+## Environment Setup
 
-1. **Navigate to server directory**
-   ```bash
-   cd server
-   ```
+### Backend
 
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+Copy [`server/.env.example`](/d:/Projects/Faculty-Skill-Development-Portal/server/.env.example) to `server/.env` and update values as needed.
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+Important variables:
 
-4. **Setup environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+- `DATABASE_URL`
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `CORS_ORIGINS`
+- `BOOTSTRAP_DEMO_USERS`
+- `DEMO_ADMIN_EMAIL`
+- `DEMO_ADMIN_PASSWORD`
+- `DEMO_FACULTY_EMAIL`
+- `DEMO_FACULTY_PASSWORD`
+- `NEWSDATA_API_KEY`
+- `SENTRY_DSN`
 
-5. **Start PostgreSQL** (ensure it's running)
-   ```bash
-   docker compose up postgres
-   ```
+### Frontend
 
-6. **Initialize database**
-   ```bash
-   python -c "from app.db.init_db import init_db_command; init_db_command()"
-   ```
+Copy [`client/.env.example`](/d:/Projects/Faculty-Skill-Development-Portal/client/.env.example) to `client/.env`.
 
-7. **Run Alembic migrations** (optional, already done in init_db)
-   ```bash
-   alembic upgrade head
-   ```
+Important variables:
 
-8. **Start the server**
-   ```bash
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
+- `VITE_API_BASE_URL`
+- `VITE_SENTRY_DSN`
+- `VITE_SENTRY_ENABLED`
 
-#### Frontend Setup
+## Run With Docker
 
-1. **Navigate to client directory**
-   ```bash
-   cd client
-   ```
+The root [`docker-compose.yml`](/d:/Projects/Faculty-Skill-Development-Portal/docker-compose.yml) starts:
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+- PostgreSQL on `localhost:5432`
+- FastAPI server on `localhost:8000`
 
-3. **Setup environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env if needed (default localhost:8000 is fine)
-   ```
+The compose file expects JWT secrets in your shell environment before startup.
 
-4. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-   Frontend will be available at `http://localhost:5173`
-
-## 📚 API Documentation
-
-### Available Endpoints
-
-#### Authentication
-- **POST** `/api/v1/auth/login` - Login with email and password
-  ```json
-  {
-    "email": "admin@fsdp.com",
-    "password": "123456"
-  }
-  ```
-  Response:
-  ```json
-  {
-    "access_token": "eyJ...",
-    "refresh_token": "eyJ...",
-    "token_type": "bearer"
-  }
-  ```
-
-- **GET** `/api/v1/auth/me` - Get current user info (requires auth token)
-  ```json
-  {
-    "id": "uuid",
-    "name": "Admin User",
-    "email": "admin@fsdp.com",
-    "role": "ADMIN",
-    "is_active": true,
-    "created_at": "2024-01-01T12:00:00Z"
-  }
-  ```
-
-#### Health
-- **GET** `/api/v1/health` - Health check endpoint
-  ```json
-  {
-    "status": "ok",
-    "database": "connected"
-  }
-  ```
-
-### Interactive API Documentation
-
-FastAPI automatically generates interactive API documentation:
-- **Swagger UI**: `http://localhost:8000/docs`
-- **ReDoc**: `http://localhost:8000/redoc`
-
-## 🔐 Authentication & Authorization
-
-### JWT Implementation
-- **Access Token**: Short-lived (default 30 min)
-- **Refresh Token**: Long-lived (default 7 days)
-- **Signing Algorithm**: HS256
-
-### Role-Based Access Control (RBAC)
-- **ADMIN**: Full system access
-- **FACULTY**: Faculty-specific features
-
-Routes are protected using the `ProtectedRoute` component (frontend) and dependency injection (backend).
-
-## 🗄️ Database Schema
-
-### Users Table
-```sql
-CREATE TABLE users (
-  id VARCHAR(36) PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  role ENUM('ADMIN', 'FACULTY') DEFAULT 'FACULTY',
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+```powershell
+$env:JWT_ACCESS_SECRET="change-me"
+$env:JWT_REFRESH_SECRET="change-me-too"
+docker compose up --build
 ```
 
-## 🔧 Environment Variables
+Notes:
 
-### Backend (.env)
-```env
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/fsdp_db
+- The current compose file does not start the Vite frontend.
+- Run the frontend separately with `npm run dev` from `client/`.
+- Demo users are bootstrapped by Docker with:
+  - `admin@fsdp.com` / `123456`
+  - `faculty@fsdp.com` / `123456`
 
-# JWT
-JWT_ACCESS_SECRET=your-secret-key
-JWT_REFRESH_SECRET=your-refresh-secret-key
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
+## Local Development
 
-# CORS
-CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
+### 1. Start the backend
 
-# Server
-DEBUG=True
-```
-
-### Frontend (.env)
-```env
-VITE_API_BASE_URL=http://localhost:8000
-```
-
-## 📦 Build & Deployment
-
-### Build Frontend
-```bash
-cd client
-npm run build
-# Output in dist/
-```
-
-### Build Docker Image
-```bash
-docker build -t fsdp-server:latest ./server
-```
-
-### Environment-Specific Builds
-Create separate `.env.production` and update configuration in `server/app/core/config.py` and `client/vite.config.ts` for production builds.
-
-## ✅ Security Considerations
-
-1. **Secrets Management**: Use strong, randomly generated secrets for JWT
-2. **CORS**: Configure CORS origins appropriately for production
-3. **Password Hashing**: Using bcrypt with salting (via passlib)
-4. **HTTPS**: Deploy behind TLS/SSL in production
-5. **Refresh Token Rotation**: Consider implementing token rotation for security
-6. **Rate Limiting**: Add rate limiting middleware to prevent brute force attacks
-7. **Input Validation**: All inputs validated with Pydantic and Zod
-
-## 🧪 Testing
-
-### Backend Tests
-```bash
+```powershell
 cd server
-pytest
+python -m venv venv
+.\venv\Scripts\activate
+pip install -e .[dev]
 ```
 
-### Frontend Tests
-```bash
+Create `server/.env`, then run:
+
+```powershell
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 2. Seed data if needed
+
+From `server/`:
+
+```powershell
+python seed_db.py
+```
+
+If you prefer demo-user bootstrap through environment variables, set:
+
+- `BOOTSTRAP_DEMO_USERS=true`
+- `DEMO_ADMIN_PASSWORD`
+- `DEMO_FACULTY_PASSWORD`
+
+### 3. Start the frontend
+
+```powershell
 cd client
+npm install
+npm run dev
+```
+
+## Default Local URLs
+
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+## Available Scripts
+
+### Frontend
+
+From `client/`:
+
+```powershell
+npm run dev
+npm run build
+npm run preview
+npm run type-check
 npm test
 ```
 
-## 📝 Development Guidelines
+### Backend
 
-### Code Style
-- Backend: Follow PEP 8, use Black formatter
-- Frontend: Follow ESLint config, use Prettier
+From `server/`:
 
-### Type Checking
-- Backend: `mypy`
-- Frontend: `tsc`
-
-### Git Workflow
-1. Create feature branch
-2. Make changes
-3. Run tests and linting
-4. Create pull request
-
-## 🚨 Troubleshooting
-
-### Port Already in Use
-```bash
-# Find process using port
-lsof -i :8000
-# Kill it if needed
-kill -9 <PID>
+```powershell
+pytest
 ```
 
-### Database Connection Issues
-1. Ensure PostgreSQL is running
-2. Check `DATABASE_URL` in `.env`
-3. Verify database exists: `psql -l`
+Helpful dev commands:
 
-### Frontend Not Loading
-1. Check frontend is running: `npm run dev`
-2. Verify `VITE_API_BASE_URL` points to backend
-3. Check CORS configuration in backend
+```powershell
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+alembic upgrade head
+```
 
-### Authentication Errors
-1. Verify tokens are being stored in localStorage
-2. Check JWT secrets match between backend and any token generation
-3. Ensure tokens haven't expired (check expiry times)
+## Authentication
 
-## 📖 Additional Resources
+- Authentication is JWT-based.
+- The API exposes login and current-user endpoints under `/api/v1/auth`.
+- The frontend uses protected routes for role-aware navigation.
+- Roles currently used across the app are `ADMIN` and `FACULTY`.
 
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [SQLAlchemy 2.0 Documentation](https://docs.sqlalchemy.org/)
-- [React Documentation](https://react.dev/)
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
-- [Vite Documentation](https://vitejs.dev/)
+## File Uploads
 
-## 📄 License
+The FastAPI app mounts an uploads directory at `/uploads`. Uploaded assets are stored under `server/uploads/`.
 
-This boilerplate is provided as-is for educational and development purposes.
+## Monitoring and Production Notes
 
-## 🤝 Contributing
+- Sentry is wired into both frontend and backend.
+- API docs can be disabled with `ENABLE_API_DOCS=false`.
+- Host header filtering is supported via `ALLOWED_HOSTS`.
+- GZip and CORS are configurable from backend settings.
 
-To extend this boilerplate:
-1. Add new database models in `server/app/models/`
-2. Create new API routes in `server/app/api/v1/routes/`
-3. Add frontend pages in `client/src/pages/`
-4. Update both `.env.example` files with new variables
-5. Document changes in this README
+Production deployment references:
 
-## ⚡ Next Steps
+- [`docs/PRODUCTION_DEPLOYMENT.md`](/d:/Projects/Faculty-Skill-Development-Portal/docs/PRODUCTION_DEPLOYMENT.md)
+- [`docs/VERCEL_RENDER_DEPLOY.md`](/d:/Projects/Faculty-Skill-Development-Portal/docs/VERCEL_RENDER_DEPLOY.md)
 
-This is a production-grade foundation. Common additions include:
+## Current Version
 
-### Backend
-- [ ] Email verification
-- [ ] Password reset flow
-- [ ] User management endpoints
-- [ ] Course management system
-- [ ] Assessment/grading system
-- [ ] File upload handling
-- [ ] Pagination and filtering
-- [ ] Search functionality
-
-### Frontend
-- [ ] User management interface
-- [ ] Course creation/management
-- [ ] Student enrollment
-- [ ] Assignment submission
-- [ ] Grading interface
-- [ ] Progress tracking
-- [ ] Notifications system
-- [ ] File upload UI
-
----
-
-**Version**: 0.1.0  
-**Last Updated**: 2024-01-15
+- App version: `0.1.0`
+- README updated: `2026-04-04`
