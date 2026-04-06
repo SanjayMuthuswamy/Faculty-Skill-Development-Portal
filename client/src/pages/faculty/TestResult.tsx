@@ -6,12 +6,36 @@ import { attemptsApi } from '../../lib/api/attempts';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { CheckCircle, XCircle, ChevronLeft, Loader2, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronLeft, Loader2, Clock, CalendarDays, Target, Circle } from 'lucide-react';
+
+const formatDuration = (seconds: number) => {
+    const safeSeconds = Math.max(0, seconds || 0);
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const remainingSeconds = safeSeconds % 60;
+
+    if (hours > 0) {
+        return `${hours}h ${minutes}m ${remainingSeconds}s`;
+    }
+
+    return `${minutes}m ${remainingSeconds}s`;
+};
+
+const formatDateTime = (value?: string) => {
+    if (!value) return 'Not available';
+
+    return new Intl.DateTimeFormat('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    }).format(new Date(value));
+};
 
 export default function TestResult() {
     const { id, attemptId } = useParams<{ id: string; attemptId: string }>();
     const navigate = useNavigate();
-    // const { user } = useAuth(); // Unused
 
     const { data: test, isLoading: isLoadingTest } = useQuery({
         queryKey: ['test', id],
@@ -27,11 +51,10 @@ export default function TestResult() {
 
     const testQuestions = test?.questions || [];
 
-    // Map answers list to record for easy lookup
     const answersRecord = useMemo(() => {
         const record: Record<string, string> = {};
-        attempt?.answers?.forEach(a => {
-            record[a.question_id] = a.selected_option;
+        attempt?.answers?.forEach((answer) => {
+            record[answer.question_id] = answer.selected_option?.trim()?.toUpperCase();
         });
         return record;
     }, [attempt]);
@@ -58,139 +81,223 @@ export default function TestResult() {
     const passed = (attempt.accuracy || 0) >= test.pass_marks;
 
     return (
-        <div className="container mx-auto max-w-4xl py-8 px-4 space-y-8">
+        <div className="mx-auto max-w-6xl space-y-8 px-4 py-8">
             <div className="flex items-center justify-between">
                 <Button variant="ghost" onClick={() => navigate('/faculty/tests')}>
                     <ChevronLeft className="mr-2 h-4 w-4" /> Back to Tests
                 </Button>
             </div>
 
-            <Card className={`border-t-8 ${passed ? 'border-t-green-600' : 'border-t-red-600'}`}>
-                <CardHeader className="text-center">
-                    <CardTitle className="text-3xl mb-2">Test Results: {test.title}</CardTitle>
-                    <div className="flex justify-center items-center gap-4">
-                        <div className="text-center">
-                            <p className="text-sm text-gray-500">Score</p>
-                            <p className={`text-4xl font-bold ${passed ? 'text-green-600' : 'text-red-600'}`}>{Math.round(attempt.accuracy || 0)}%</p>
+            <Card className={`overflow-hidden border-0 shadow-lg ${passed ? 'bg-green-50/70' : 'bg-red-50/70'}`}>
+                <CardHeader className="space-y-5 border-b border-white/70 bg-white/70 backdrop-blur">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Official Assessment Review</p>
+                            <CardTitle className="mt-2 text-3xl text-slate-900">{test.title}</CardTitle>
+                            <p className="mt-2 text-sm text-slate-600">
+                                Score review with correct answers, your selections, and timing details.
+                            </p>
                         </div>
-                        <div className="h-12 w-px bg-gray-200" />
-                        <div className="text-center">
-                            <p className="text-sm text-gray-500">Result</p>
-                            <Badge className="text-lg px-4 py-1" variant={passed ? 'success' : 'destructive'}>
-                                {passed ? 'PASSED' : 'FAILED'}
-                            </Badge>
+
+                        <div className="flex items-center gap-4">
+                            <div className="text-center">
+                                <p className="text-sm text-slate-500">Score</p>
+                                <p className={`text-4xl font-bold ${passed ? 'text-green-600' : 'text-red-600'}`}>
+                                    {Math.round(attempt.accuracy || 0)}%
+                                </p>
+                            </div>
+                            <div className="h-12 w-px bg-slate-200" />
+                            <div className="text-center">
+                                <p className="text-sm text-slate-500">Result</p>
+                                <Badge className="px-4 py-1 text-lg" variant={passed ? 'success' : 'destructive'}>
+                                    {passed ? 'PASSED' : 'FAILED'}
+                                </Badge>
+                            </div>
                         </div>
                     </div>
                 </CardHeader>
             </Card>
 
-            {/* Performance Summary Panel */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card className="bg-blue-50/50 border-blue-100">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <Card className="border-blue-100 bg-blue-50/70">
                     <CardHeader className="py-4">
                         <CardTitle className="text-sm font-medium text-blue-600">Total Questions</CardTitle>
                     </CardHeader>
                     <CardContent className="py-0 pb-4">
-                        <p className="text-2xl font-bold">{attempt.total}</p>
+                        <p className="text-2xl font-bold text-slate-900">{attempt.total}</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-green-50/50 border-green-100">
+                <Card className="border-green-100 bg-green-50/70">
                     <CardHeader className="py-4">
                         <CardTitle className="text-sm font-medium text-green-600">Correct</CardTitle>
                     </CardHeader>
                     <CardContent className="py-0 pb-4">
-                        <p className="text-2xl font-bold">{attempt.correct_count}</p>
+                        <p className="text-2xl font-bold text-slate-900">{attempt.correct_count}</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-red-50/50 border-red-100">
+                <Card className="border-red-100 bg-red-50/70">
                     <CardHeader className="py-4">
                         <CardTitle className="text-sm font-medium text-red-600">Incorrect</CardTitle>
                     </CardHeader>
                     <CardContent className="py-0 pb-4">
-                        <p className="text-2xl font-bold">{attempt.incorrect_count}</p>
+                        <p className="text-2xl font-bold text-slate-900">{attempt.incorrect_count}</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-gray-50/50 border-gray-200">
+                <Card className="border-slate-200 bg-slate-50/80">
                     <CardHeader className="py-4">
-                        <CardTitle className="text-sm font-medium text-gray-600">Unanswered</CardTitle>
+                        <CardTitle className="text-sm font-medium text-slate-600">Unanswered</CardTitle>
                     </CardHeader>
                     <CardContent className="py-0 pb-4">
-                        <p className="text-2xl font-bold">{attempt.unanswered_count}</p>
+                        <p className="text-2xl font-bold text-slate-900">{attempt.unanswered_count}</p>
                     </CardContent>
                 </Card>
             </div>
 
-            <Card className="bg-white border-gray-200">
-                <CardContent className="py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Clock className="h-5 w-5 text-gray-500" />
-                        <span className="text-sm font-medium text-gray-700">Time Taken:</span>
-                    </div>
-                    <span className="text-lg font-bold text-gray-900">
-                        {Math.floor(attempt.time_taken_seconds / 60)}m {attempt.time_taken_seconds % 60}s
-                    </span>
-                </CardContent>
-            </Card>
+            <div className="grid gap-4 lg:grid-cols-3">
+                <Card className="border-slate-200">
+                    <CardContent className="flex items-center gap-3 py-5">
+                        <div className="rounded-2xl bg-blue-100 p-3 text-blue-700">
+                            <Clock className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-500">Time Taken</p>
+                            <p className="text-xl font-bold text-slate-900">{formatDuration(attempt.time_taken_seconds)}</p>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="border-slate-200">
+                    <CardContent className="flex items-center gap-3 py-5">
+                        <div className="rounded-2xl bg-violet-100 p-3 text-violet-700">
+                            <CalendarDays className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-500">Started At</p>
+                            <p className="text-sm font-semibold text-slate-900">{formatDateTime(attempt.started_at)}</p>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="border-slate-200">
+                    <CardContent className="flex items-center gap-3 py-5">
+                        <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
+                            <Target className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-500">Submitted At</p>
+                            <p className="text-sm font-semibold text-slate-900">{formatDateTime(attempt.submitted_at)}</p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
 
             <div className="space-y-4">
-                <h3 className="text-xl font-semibold">Question Review</h3>
+                <div className="flex items-center justify-between gap-4">
+                    <h3 className="text-2xl font-semibold text-slate-900">Question Review</h3>
+                    <p className="text-sm text-slate-500">Green shows the correct answer. Red shows a wrong selected answer.</p>
+                </div>
+
                 {testQuestions.map((question, index) => {
-                    const selectedOptionLetter = answersRecord[question.id]?.trim()?.toUpperCase();
-                    const isCorrect = selectedOptionLetter === question.correct_option;
+                    const selectedOptionLetter = answersRecord[question.id];
+                    const isAnswered = Boolean(selectedOptionLetter);
+                    const isCorrect = isAnswered && selectedOptionLetter === question.correct_option;
 
                     const options = {
-                        'A': question.option_a,
-                        'B': question.option_b,
-                        'C': question.option_c,
-                        'D': question.option_d,
+                        A: question.option_a,
+                        B: question.option_b,
+                        C: question.option_c,
+                        D: question.option_d,
                     };
 
                     const optionEntries = Object.entries(options);
 
+                    const containerClass = isCorrect
+                        ? 'border-green-200 bg-green-50/40'
+                        : isAnswered
+                            ? 'border-red-200 bg-red-50/40'
+                            : 'border-slate-200 bg-slate-50/70';
+
                     return (
-                        <Card key={question.id} className={isCorrect ? 'border-green-200 bg-green-50/30' : 'border-red-200 bg-red-50/30'}>
-                            <CardHeader className="pb-2">
-                                <div className="flex justify-between items-start">
-                                    <span className="font-medium text-gray-500">Question {index + 1}</span>
+                        <Card key={question.id} className={containerClass}>
+                            <CardHeader className="pb-3">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-500">Question {index + 1}</p>
+                                        <CardTitle className="mt-2 text-lg leading-relaxed text-slate-900">
+                                            {question.question_text}
+                                        </CardTitle>
+                                    </div>
                                     {isCorrect ? (
-                                        <Badge variant="success" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Correct</Badge>
+                                        <Badge variant="success" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
+                                            Correct
+                                        </Badge>
+                                    ) : isAnswered ? (
+                                        <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">
+                                            Incorrect
+                                        </Badge>
                                     ) : (
-                                        <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">Incorrect</Badge>
+                                        <Badge className="border-slate-200 bg-white text-slate-600 hover:bg-white">
+                                            Unanswered
+                                        </Badge>
                                     )}
                                 </div>
-                                <CardTitle className="text-base mt-2">{question.question_text}</CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2">
+
+                            <CardContent className="space-y-4">
+                                <div className="grid gap-2">
                                     {optionEntries.map(([letter, text]) => {
                                         const isSelected = selectedOptionLetter === letter;
                                         const isAnswer = question.correct_option === letter;
 
-                                        let style = "p-3 rounded-md border text-sm ";
-                                        if (isAnswer) style += "bg-green-100 border-green-300 text-green-900 font-medium";
-                                        else if (isSelected && !isAnswer) style += "bg-red-50 border-red-300 text-red-900";
-                                        else style += "bg-white border-gray-200 text-gray-700";
+                                        let style = 'rounded-xl border p-3 text-sm ';
+                                        if (isAnswer) style += 'border-green-300 bg-green-100 text-green-900';
+                                        else if (isSelected) style += 'border-red-300 bg-red-50 text-red-900';
+                                        else style += 'border-slate-200 bg-white text-slate-700';
 
                                         return (
                                             <div key={letter} className={style}>
-                                                <div className="flex items-center">
-                                                    <div className={`
-                                                        flex h-5 w-5 items-center justify-center rounded-full border mr-3 text-[10px]
-                                                        ${isSelected ? 'bg-current text-white border-transparent' : 'border-gray-300'}
-                                                    `}>
-                                                        <span className={isSelected ? 'text-white' : 'text-gray-500'}>{letter}</span>
+                                                <div className="flex items-start gap-3">
+                                                    <div
+                                                        className={[
+                                                            'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold',
+                                                            isAnswer
+                                                                ? 'border-green-600 bg-green-600 text-white'
+                                                                : isSelected
+                                                                    ? 'border-red-600 bg-red-600 text-white'
+                                                                    : 'border-slate-300 bg-white text-slate-500',
+                                                        ].join(' ')}
+                                                    >
+                                                        {letter}
                                                     </div>
-                                                    {isAnswer && <CheckCircle className="mr-2 h-4 w-4 text-green-600 shrink-0" />}
-                                                    {isSelected && !isAnswer && <XCircle className="mr-2 h-4 w-4 text-red-600 shrink-0" />}
-                                                    <span className="flex-1">{text}</span>
+
+                                                    {isAnswer ? (
+                                                        <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                                                    ) : isSelected ? (
+                                                        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                                                    ) : (
+                                                        <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
+                                                    )}
+
+                                                    <span className="flex-1 leading-relaxed">{text}</span>
                                                 </div>
                                             </div>
                                         );
                                     })}
                                 </div>
-                                <div className="mt-4 p-3 bg-blue-50 text-blue-900 rounded-md text-sm">
-                                    <span className="font-semibold">Explanation:</span> {question.explanation}
+
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                                        <span className="font-semibold">Your Answer:</span>{' '}
+                                        {selectedOptionLetter ? `${selectedOptionLetter}` : 'Not answered'}
+                                    </div>
+                                    <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                                        <span className="font-semibold">Correct Answer:</span> {question.correct_option}
+                                    </div>
                                 </div>
+
+                                {question.explanation ? (
+                                    <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-700">
+                                        <span className="font-semibold text-slate-900">Explanation:</span> {question.explanation}
+                                    </div>
+                                ) : null}
                             </CardContent>
                         </Card>
                     );

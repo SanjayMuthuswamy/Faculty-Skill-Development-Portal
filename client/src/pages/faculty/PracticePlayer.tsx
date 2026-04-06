@@ -164,18 +164,18 @@ export default function PracticePlayer() {
 
     return (
         <div className="fixed inset-0 bg-slate-50 z-[9999] flex flex-col font-sans overflow-hidden">
-            <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm flex-shrink-0">
-                <div className="flex items-center gap-4">
+            <header className="min-h-16 bg-white border-b border-slate-200 px-4 py-3 sm:px-6 flex items-center justify-between gap-4 shadow-sm flex-shrink-0">
+                <div className="flex min-w-0 items-center gap-4">
                     <div className="h-10 w-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
                         <Sparkles className="h-6 w-6" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <h1 className="text-lg font-semibold text-slate-900 leading-tight line-clamp-1">AI Practice: {currentSet.domain}</h1>
                         <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{currentSet.difficulty} • {currentSet.source} Mode</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex shrink-0 items-center gap-4">
                     <div className="hidden md:flex flex-col items-end mr-4">
                         <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Practice Mode</div>
                         <div className="text-sm font-semibold text-indigo-600">No Time Limit</div>
@@ -193,23 +193,23 @@ export default function PracticePlayer() {
             </header>
 
             <main className="flex-1 flex overflow-hidden">
-                <div className="flex-1 flex flex-col overflow-y-auto bg-white p-8 lg:p-12 relative">
+                <div className="flex-1 flex flex-col overflow-y-auto bg-white px-4 py-6 sm:px-6 lg:px-8 lg:py-8 xl:px-12 relative">
                     <div className="max-w-3xl mx-auto w-full">
-                        <div className="flex items-center gap-3 mb-8">
+                        <div className="flex items-center gap-3 mb-6 sm:mb-8">
                             <span className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-50 text-indigo-600 font-semibold text-sm">
                                 {currentIdx + 1}
                             </span>
                             <span className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Question</span>
                         </div>
 
-                        <div className="mb-10">
-                            <h2 className="text-2xl font-semibold text-slate-800 leading-relaxed mb-4">
+                        <div className="mb-8 sm:mb-10">
+                            <h2 className="text-xl sm:text-2xl font-semibold text-slate-800 leading-relaxed mb-4">
                                 {currentQuestion.question_text}
                             </h2>
                             <div className="h-1 w-20 bg-indigo-600 rounded-full" />
                         </div>
 
-                        <div className="space-y-4 mb-16">
+                        <div className="space-y-3 sm:space-y-4 pb-32">
                             {[
                                 { k: 'A', t: currentQuestion.option_a },
                                 { k: 'B', t: currentQuestion.option_b },
@@ -220,7 +220,7 @@ export default function PracticePlayer() {
                                     key={opt.k}
                                     onClick={() => handleSelect(opt.k)}
                                     className={cn(
-                                        "w-full flex items-center gap-4 p-5 rounded-2xl border-2 transition-all duration-200 text-left group",
+                                        "w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 transition-all duration-200 text-left group",
                                         answers[currentQuestion.id] === opt.k
                                             ? "border-indigo-600 bg-indigo-50/50"
                                             : "border-slate-100 hover:border-slate-200 hover:bg-slate-50"
@@ -235,7 +235,7 @@ export default function PracticePlayer() {
                                         {opt.k}
                                     </div>
                                     <span className={cn(
-                                        "font-medium text-lg leading-tight",
+                                        "font-medium text-base sm:text-lg leading-tight",
                                         answers[currentQuestion.id] === opt.k ? "text-indigo-800" : "text-slate-600"
                                     )}>
                                         {opt.t}
@@ -244,8 +244,9 @@ export default function PracticePlayer() {
                             ))}
                         </div>
 
-                        <div className="flex items-center justify-between border-t border-slate-100 pt-8 pb-12">
-                            <div className="flex items-center gap-3">
+                        <div className="sticky bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 xl:-mx-12 border-t border-slate-200 bg-white/95 px-4 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur sm:px-6 lg:px-8 xl:px-12">
+                            <div className="mx-auto flex max-w-3xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                                 <Button
                                     variant="outline"
                                     onClick={toggleMarkForReview}
@@ -260,7 +261,7 @@ export default function PracticePlayer() {
                                 </Button>
                             </div>
 
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
                                 <Button
                                     variant="outline"
                                     className="rounded-xl h-12 px-6 font-semibold border-slate-200 text-slate-600"
@@ -277,6 +278,7 @@ export default function PracticePlayer() {
                                     Next Question <ArrowRight className="ml-2 h-4 w-4" />
                                 </Button>
                             </div>
+                            </div>
                         </div>
 
                         <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
@@ -289,7 +291,7 @@ export default function PracticePlayer() {
                     </div>
                 </div>
 
-                <aside className="w-80 bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden flex-shrink-0">
+                <aside className="hidden xl:flex w-80 bg-slate-50 border-l border-slate-200 flex-col overflow-hidden flex-shrink-0">
                     <div className="p-6 border-b border-slate-200 bg-white grid grid-cols-3 gap-2">
                         <div className="flex flex-col items-center p-3 rounded-xl bg-indigo-50 text-indigo-700">
                             <span className="text-xl font-semibold">{answeredCount}</span>

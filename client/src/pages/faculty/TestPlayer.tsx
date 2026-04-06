@@ -202,26 +202,26 @@ export default function TestPlayer() {
     return (
         <div className="fixed inset-0 bg-slate-50 z-[9999] flex flex-col font-sans overflow-hidden">
             {/* Professional Header */}
-            <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm flex-shrink-0">
-                <div className="flex items-center gap-4">
+            <header className="min-h-16 bg-white border-b border-slate-200 px-4 py-3 sm:px-6 flex items-center justify-between gap-4 shadow-sm flex-shrink-0">
+                <div className="flex min-w-0 items-center gap-4">
                     <div className="h-10 w-10 rounded-lg bg-blue-600 flex items-center justify-center text-white font-semibold text-xl">
                         F
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <h1 className="text-lg font-semibold text-slate-900 leading-tight line-clamp-1">{test.title}</h1>
                         <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Official Assessment</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-6">
-                    <div className={`flex items-center gap-2.5 px-5 py-2 rounded-xl font-mono text-lg font-semibold border transition-colors ${timeLeft < 300 ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse' : 'bg-slate-50 border-slate-200 text-slate-700'
+                <div className="flex shrink-0 items-center gap-3 sm:gap-6">
+                    <div className={`flex items-center gap-2.5 px-3 py-2 sm:px-5 rounded-xl font-mono text-base sm:text-lg font-semibold border transition-colors ${timeLeft < 300 ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse' : 'bg-slate-50 border-slate-200 text-slate-700'
                         }`}>
                         <Clock className={`h-5 w-5 ${timeLeft < 300 ? 'text-rose-500' : 'text-slate-400'}`} />
                         {formatTime(timeLeft)}
                     </div>
                     <Button
                         variant="default"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-8 rounded-xl shadow-lg shadow-emerald-600/20 h-11"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 sm:px-8 rounded-xl shadow-lg shadow-emerald-600/20 h-11"
                         onClick={handleSubmit}
                         disabled={!attemptId || submitMutation.isPending}
                     >
@@ -233,10 +233,10 @@ export default function TestPlayer() {
 
             <main className="flex-1 flex overflow-hidden">
                 {/* Left: Main Content */}
-                <div className="flex-1 flex flex-col overflow-y-auto bg-white p-8 lg:p-12 relative">
+                <div className="flex-1 flex flex-col overflow-y-auto bg-white px-4 py-6 sm:px-6 lg:px-8 lg:py-8 xl:px-12 relative">
                     <div className="max-w-3xl mx-auto w-full">
                         {/* Question Number Row */}
-                        <div className="flex items-center gap-3 mb-8">
+                        <div className="flex items-center gap-3 mb-6 sm:mb-8">
                             <span className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-50 text-blue-600 font-semibold text-sm">
                                 {currentQuestionIndex + 1}
                             </span>
@@ -244,15 +244,15 @@ export default function TestPlayer() {
                         </div>
 
                         {/* Question Text */}
-                        <div className="mb-10">
-                            <h2 className="text-2xl font-semibold text-slate-800 leading-relaxed mb-4">
+                        <div className="mb-8 sm:mb-10">
+                            <h2 className="text-xl sm:text-2xl font-semibold text-slate-800 leading-relaxed mb-4">
                                 {currentQuestion.question_text}
                             </h2>
                             <div className="h-1 w-20 bg-blue-600 rounded-full" />
                         </div>
 
                         {/* Options */}
-                        <div className="space-y-4 mb-16">
+                        <div className="space-y-3 sm:space-y-4 pb-32">
                             {[
                                 { key: 'A', text: currentQuestion.option_a },
                                 { key: 'B', text: currentQuestion.option_b },
@@ -263,7 +263,7 @@ export default function TestPlayer() {
                                     key={opt.key}
                                     onClick={() => handleOptionSelect(opt.key)}
                                     className={cn(
-                                        "w-full flex items-center gap-4 p-5 rounded-2xl border-2 transition-all duration-200 text-left group",
+                                        "w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 transition-all duration-200 text-left group",
                                         answers[currentQuestion.id] === opt.key
                                             ? "border-blue-600 bg-blue-50/50"
                                             : "border-slate-100 hover:border-slate-200 hover:bg-slate-50"
@@ -278,7 +278,7 @@ export default function TestPlayer() {
                                         {opt.key}
                                     </div>
                                     <span className={cn(
-                                        "font-medium text-lg leading-tight",
+                                        "font-medium text-base sm:text-lg leading-tight",
                                         answers[currentQuestion.id] === opt.key ? "text-blue-800" : "text-slate-600"
                                     )}>
                                         {opt.text}
@@ -288,8 +288,9 @@ export default function TestPlayer() {
                         </div>
 
                         {/* Footer Actions */}
-                        <div className="flex items-center justify-between border-t border-slate-100 pt-8 pb-12">
-                            <div className="flex items-center gap-3">
+                        <div className="sticky bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 xl:-mx-12 border-t border-slate-200 bg-white/95 px-4 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur sm:px-6 lg:px-8 xl:px-12">
+                            <div className="mx-auto flex max-w-3xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                                 <Button
                                     variant="outline"
                                     onClick={toggleMarkForReview}
@@ -306,13 +307,13 @@ export default function TestPlayer() {
                                     variant="ghost"
                                     onClick={clearSelection}
                                     disabled={!answers[currentQuestion.id]}
-                                    className="text-slate-400 hover:text-slate-600 font-semibold hover:bg-transparent"
+                                    className="justify-start text-slate-400 hover:text-slate-600 font-semibold hover:bg-transparent sm:justify-center"
                                 >
                                     Clear Answer
                                 </Button>
                             </div>
 
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
                                 <Button
                                     variant="outline"
                                     className="rounded-xl h-12 px-6 font-semibold border-slate-200 text-slate-600"
@@ -329,12 +330,13 @@ export default function TestPlayer() {
                                     Next Question <ArrowRight className="ml-2 h-4 w-4" />
                                 </Button>
                             </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Right: Navigation Sidebar */}
-                <aside className="w-80 bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden flex-shrink-0">
+                <aside className="hidden xl:flex w-80 bg-slate-50 border-l border-slate-200 flex-col overflow-hidden flex-shrink-0">
                     {/* Status Stats */}
                     <div className="p-6 border-b border-slate-200 bg-white grid grid-cols-3 gap-2">
                         <div className="flex flex-col items-center p-3 rounded-xl bg-emerald-50 text-emerald-700">
