@@ -10,7 +10,7 @@ class CRUDGrowthPlan(CRUDBase[GrowthPlan, GrowthPlanCreate, GrowthPlanUpdate]):
     async def get_by_user(self, db: AsyncSession, *, user_id: str) -> List[GrowthPlan]:
         result = await db.execute(select(GrowthPlan).filter(GrowthPlan.user_id == user_id))
         return result.scalars().all()
-
+       
     async def create(self, db: AsyncSession, *, obj_in: GrowthPlanCreate, user_id: str) -> GrowthPlan:
         db_obj = GrowthPlan(
             id=str(uuid.uuid4()),

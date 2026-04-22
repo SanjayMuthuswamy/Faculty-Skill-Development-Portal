@@ -11,7 +11,6 @@ def setup_logging():
         handlers=[logging.StreamHandler(sys.stdout)],
     )
     
-    # Set lower level for third-party libraries to avoid noise
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
